@@ -30,7 +30,7 @@ const HeaderDrawer: FC<HeaderDrawerProps> = ({ isOpen, onClose }) => {
       <DrawerOverlay />
       <DrawerContent bg={bg} py={6}>
         <DrawerCloseButton onClose={onClose} zIndex={2} />
-        <DrawerBody pt={10}>
+        <DrawerBody pt={7}>
           <Navigation showHomeLink />
         </DrawerBody>
       </DrawerContent>

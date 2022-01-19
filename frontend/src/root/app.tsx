@@ -17,9 +17,12 @@ const App: FC = () => {
         <Header />
         <Container maxW="container.lg" py={{ base: 6, md: 8 }}>
           <HStack align="flex-start" spacing={{ base: 0, md: 16 }}>
-            <Box display={{ base: "none", md: "block" }}>
-              {location.pathname !== "/" && <Navigation />}
-            </Box>
+            {location.pathname !== "/" && (
+              <Box display={{ base: "none", md: "block" }} flexShrink={0}>
+                <Navigation />
+              </Box>
+            )}
+
             <Box w="100%">
               <Outlet />
             </Box>

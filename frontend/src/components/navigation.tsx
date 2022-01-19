@@ -16,7 +16,6 @@ import {
   Stack,
   HStack,
   Text,
-  Heading,
   Box,
   useColorModeValue,
   Icon,
@@ -55,7 +54,7 @@ const NavigationItem: FC<NavigationItemProps> = ({ children, icon, to }) => {
 
 const Navigation: FC<{ showHomeLink?: boolean }> = ({ showHomeLink }) => {
   return (
-    <Box as="aside" position="sticky" top="0" flexShrink={0}>
+    <Box as="aside" position="sticky" top="0">
       <Stack as="aside" spacing={2}>
         {showHomeLink && (
           <NavigationItem to="/" icon={LogoIcon}>
