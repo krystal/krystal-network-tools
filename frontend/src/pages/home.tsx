@@ -1,9 +1,7 @@
 import { FC } from "react";
 
 import {
-  Box,
   Heading,
-  HStack,
   Icon,
   SimpleGrid,
   Stack,
@@ -13,13 +11,14 @@ import {
 import { IconType } from "react-icons";
 import {
   FcElectricity,
-  FcGenealogy,
-  FcGlobe,
+  FcFeedIn,
+  FcSearch,
   FcMindMap,
   FcQuestions,
-  FcUndo,
+  FcInfo,
 } from "react-icons/fc";
 import { Link } from "react-router-dom";
+import Card from "../components/card";
 
 type Page = {
   title: string;
@@ -49,50 +48,42 @@ const pages: Page[] = [
   },
   {
     url: "/dns",
-    icon: FcGlobe,
+    icon: FcSearch,
     title: "DNS",
     text: "Find DNS records associated with a hostname.",
   },
   {
     url: "/reverse-dns",
-    icon: FcUndo,
+    icon: FcInfo,
     title: "Reverse DNS",
     text: "Find all DNS records associated with a specific IP address.",
   },
   {
     url: "/bgp-route",
-    icon: FcGenealogy,
+    icon: FcFeedIn,
     title: "BGP Route",
     text: "Look up BGP routes for a specific address.",
   },
 ];
 
 const Home: FC = () => {
-  const borderColor = useColorModeValue("gray.200", "gray.700");
-  const bgColor = useColorModeValue("white", "gray.700");
+  const textColor = useColorModeValue("gray.500", "gray.300");
   const hoverBgColor = useColorModeValue("brand.400", "brand.300");
 
   return (
     <SimpleGrid columns={{ base: 1, lg: 2 }} gap={6}>
       {pages.map((page) => (
         <Link to={page.url}>
-          <Stack
-            py={6}
-            px={4}
-            align="center"
-            justify="center"
-            textAlign="center"
-            borderRadius="md"
-            border="2px solid"
-            borderColor={borderColor}
-            bg={bgColor}
+          <Card
             height="100%"
-            _hover={{ borderColor: hoverBgColor }}
+            _hover={{ borderColor: hoverBgColor, color: hoverBgColor }}
           >
-            <Icon w={12} h={12} as={page.icon} mb={4} />
-            <Heading size="md">{page.title}</Heading>
-            <Text opacity="0.6">{page.text}</Text>
-          </Stack>
+            <Stack align="center" justify="center" textAlign="center">
+              <Icon w={10} h={10} as={page.icon} mb={4} />
+              <Heading size="md">{page.title}</Heading>
+              <Text color={textColor}>{page.text}</Text>
+            </Stack>
+          </Card>
         </Link>
       ))}
     </SimpleGrid>

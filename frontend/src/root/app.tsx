@@ -1,12 +1,7 @@
 import { FC } from "react";
 import { Outlet } from "react-router-dom";
 
-import {
-  Box,
-  ChakraProvider,
-  Container,
-  useColorModeValue,
-} from "@chakra-ui/react";
+import { Box, ChakraProvider, Container } from "@chakra-ui/react";
 
 import theme from "./theme";
 import "./app.css";

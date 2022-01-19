@@ -4,12 +4,12 @@ import { NavLink, useMatch } from "react-router-dom";
 import LogoIcon from "./logo-icon";
 
 import {
-  FcUndo,
+  FcInfo,
   FcElectricity,
   FcQuestions,
-  FcGlobe,
+  FcSearch,
   FcMindMap,
-  FcGenealogy,
+  FcFeedIn,
 } from "react-icons/fc";
 
 import {
@@ -31,7 +31,7 @@ const NavigationItem: FC<NavigationItemProps> = ({ children, icon, to }) => {
   const active = useMatch(to);
 
   const bgColor = useColorModeValue("gray.50", "gray.700");
-  const activeBgColor = useColorModeValue("brand.50", "brand.700");
+  const activeBgColor = useColorModeValue("brand.50", "gray.900");
 
   return (
     <NavLink to={to}>
@@ -90,13 +90,13 @@ const Navigation: FC = () => {
           <NavigationItem to="/whois" icon={FcQuestions}>
             WHOIS
           </NavigationItem>
-          <NavigationItem to="/dns" icon={FcGlobe}>
+          <NavigationItem to="/dns" icon={FcSearch}>
             DNS
           </NavigationItem>
-          <NavigationItem to="/reverse-dns" icon={FcUndo}>
+          <NavigationItem to="/reverse-dns" icon={FcInfo}>
             Reverse DNS
           </NavigationItem>
-          <NavigationItem to="/bgp-route" icon={FcGenealogy}>
+          <NavigationItem to="/bgp-route" icon={FcFeedIn}>
             BGP Route
           </NavigationItem>
         </NavigationSection>
