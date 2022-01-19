@@ -73,7 +73,7 @@ const Home: FC = () => {
   return (
     <SimpleGrid columns={{ base: 1, lg: 2 }} gap={6}>
       {pages.map((page) => (
-        <Link to={page.url}>
+        <Link to={page.url} key={page.url}>
           <Card
             height="100%"
             _hover={{ borderColor: hoverBgColor, color: hoverBgColor }}

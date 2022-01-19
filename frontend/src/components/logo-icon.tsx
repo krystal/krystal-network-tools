@@ -3,14 +3,8 @@ import { FC } from "react";
 
 const LogoIcon: FC<IconProps> = (props) => (
   <Icon viewBox="0 0 135 133" {...props}>
-    <g
-      id="Page-1"
-      stroke="none"
-      stroke-width="1"
-      fill="none"
-      fill-rule="evenodd"
-    >
-      <g id="Artboard" fill="currentColor" fill-rule="nonzero">
+    <g id="Page-1" stroke="none" strokeWidth="1" fill="none" fillRule="evenodd">
+      <g id="Artboard" fill="currentColor" fillRule="nonzero">
         <g id="Group">
           <polygon id="Path" points="62 133 62 56.3333333 1 41"></polygon>
           <polygon

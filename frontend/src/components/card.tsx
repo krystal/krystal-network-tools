@@ -15,6 +15,8 @@ const Card: FC<BoxProps> = ({ children, ...props }) => {
       border={`${borderWidth} solid`}
       borderColor={borderColor}
       bg={bgColor}
+      w="100%"
+      overflow="hidden"
       {...props}
     >
       {children}

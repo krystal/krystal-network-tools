@@ -102,7 +102,17 @@ const Header: FC = () => {
             <HStack justify="flex-end">
               <Tag variant="subtle" colorScheme="brand">
                 <TagLeftIcon boxSize="12px" as={BiNetworkChart} />
-                <TagLabel>{ipAddress}</TagLabel>
+                <TagLabel
+                  maxWidth={{
+                    base: "120px",
+                    sm: "320px",
+                    md: "200px",
+                    lg: "320px",
+                  }}
+                  isTruncated
+                >
+                  {ipAddress}
+                </TagLabel>
               </Tag>
             </HStack>
           </GridItem>
