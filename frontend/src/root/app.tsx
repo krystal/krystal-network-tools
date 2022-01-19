@@ -16,8 +16,10 @@ const App: FC = () => {
       <ChakraProvider theme={theme}>
         <Header />
         <Container maxW="container.lg" py={{ base: 6, md: 8 }}>
-          <HStack align="flex-start" spacing={16}>
-            {location.pathname !== "/" && <Navigation />}
+          <HStack align="flex-start" spacing={{ base: 0, md: 16 }}>
+            <Box display={{ base: "none", md: "block" }}>
+              {location.pathname !== "/" && <Navigation />}
+            </Box>
             <Box w="100%">
               <Outlet />
             </Box>
