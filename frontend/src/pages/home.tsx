@@ -73,13 +73,12 @@ const Home: FC = () => {
   const hoverBgColor = useColorModeValue("brand.400", "brand.300");
 
   return (
-    <SimpleGrid columns={{ base: 1, md: 2 }} gap={6}>
+    <SimpleGrid columns={{ base: 1, lg: 2 }} gap={6}>
       {pages.map((page) => (
         <Link to={page.url}>
           <Stack
             py={6}
             px={4}
-            spacing={2}
             align="center"
             justify="center"
             textAlign="center"
@@ -90,7 +89,7 @@ const Home: FC = () => {
             height="100%"
             _hover={{ borderColor: hoverBgColor }}
           >
-            <Icon w={12} h={12} as={page.icon} />
+            <Icon w={12} h={12} as={page.icon} mb={4} />
             <Heading size="md">{page.title}</Heading>
             <Text opacity="0.6">{page.text}</Text>
           </Stack>
