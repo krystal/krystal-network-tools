@@ -1,0 +1,11 @@
+html, body, #root {
+  height: 100%;
+}
+
+body.chakra-ui-light {
+  background: #EDF2F7;
+}
+
+body.chakra-ui-dark {
+  background: #1A202C;
+}
