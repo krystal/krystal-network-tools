@@ -1,0 +1,11 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: backend
+    privileged: true
+    environment:
+      DNS_SERVER: "1.1.1.1"
+    ports:
+      - "8080:8080"
