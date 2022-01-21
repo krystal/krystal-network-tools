@@ -23,10 +23,13 @@ func main() {
 	utils.InitializeDNSServer(logger)
 
 	// Make the gin server.
-	r := gin.Default()
+	r := gin.New()
+	if err := r.SetTrustedProxies(nil); err != nil {
+		logger.Fatal("Failed to set trusted proxies", zap.Error(err))
+	}
 	r.Use(cors.Default())
 	r.Use(ginzap.Ginzap(logger, time.RFC3339, true))
-	//r.Use(ginzap.RecoveryWithZap(logger, true))
+	r.Use(ginzap.RecoveryWithZap(logger, true))
 	g := r.Group("/v1")
 	api.Init(g, logger)
 
