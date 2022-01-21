@@ -5,9 +5,6 @@ import {
   Container,
   Heading,
   HStack,
-  IconButton,
-  Tooltip,
-  Icon,
   useColorMode,
   useColorModeValue,
   Tag,
@@ -15,37 +12,21 @@ import {
   TagLabel,
   Grid,
   GridItem,
+  Tooltip,
 } from "@chakra-ui/react";
 
-import { FaBars, FaMoon, FaSun } from "react-icons/fa";
+import { FaBars, FaMoon } from "react-icons/fa";
 import { BiNetworkChart } from "react-icons/bi";
-import { IconType } from "react-icons";
+import { BsSunFill } from "react-icons/bs";
 
-import useIpAddress from "../hooks/use-ip-address";
+import useQuery from "../hooks/use-query";
 import LogoIcon from "./logo-icon";
 import { Link } from "react-router-dom";
 import HeaderDrawer from "./header-drawer";
-
-const HeaderIconButton: FC<{
-  label: string;
-  onClick?: () => void;
-  icon: IconType;
-}> = ({ label, onClick, icon }) => {
-  return (
-    <Tooltip label={label}>
-      <IconButton
-        size="sm"
-        variant="ghost"
-        aria-label={label}
-        onClick={onClick}
-        icon={<Icon as={icon} w={4} h={4} />}
-      />
-    </Tooltip>
-  );
-};
+import HeaderIconButton from "./header-icon-button";
 
 const Header: FC = () => {
-  const { ipAddress } = useIpAddress();
+  const { data } = useQuery<{ ip: string }>("/ip");
   const { toggleColorMode } = useColorMode();
   const [menuIsOpen, setMenuIsOpen] = useState(false);
 
@@ -76,7 +57,7 @@ const Header: FC = () => {
                 label="Open menu"
               />
               <HeaderIconButton
-                icon={useColorModeValue(FaMoon, FaSun)}
+                icon={useColorModeValue(FaMoon, BsSunFill)}
                 onClick={toggleColorMode}
                 label={useColorModeValue(
                   "Switch to dark mode",
@@ -100,20 +81,24 @@ const Header: FC = () => {
 
           <GridItem>
             <HStack justify="flex-end">
-              <Tag variant="subtle" colorScheme="brand">
-                <TagLeftIcon boxSize="12px" as={BiNetworkChart} />
-                <TagLabel
-                  maxWidth={{
-                    base: "120px",
-                    sm: "320px",
-                    md: "200px",
-                    lg: "320px",
-                  }}
-                  isTruncated
-                >
-                  {ipAddress}
-                </TagLabel>
-              </Tag>
+              {data?.ip && (
+                <Tooltip label="Your current IP address">
+                  <Tag variant="subtle" colorScheme="brand">
+                    <TagLeftIcon boxSize="12px" as={BiNetworkChart} />
+                    <TagLabel
+                      maxWidth={{
+                        base: "120px",
+                        sm: "320px",
+                        md: "200px",
+                        lg: "320px",
+                      }}
+                      isTruncated
+                    >
+                      {data.ip}
+                    </TagLabel>
+                  </Tag>
+                </Tooltip>
+              )}
             </HStack>
           </GridItem>
         </Grid>

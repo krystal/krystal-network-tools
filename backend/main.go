@@ -27,6 +27,11 @@ func main() {
 	// Handle CORS.
 	r.Use(func(ctx *gin.Context) {
 		ctx.Header("Access-Control-Allow-Origin", "*")
+		ctx.Header("Access-Control-Allow-Headers", "Content-Type")
+
+		if ctx.Request.Method == "OPTIONS" {
+			ctx.AbortWithStatus(204)
+		}
 	})
 
 	// Handle trusted proxies.

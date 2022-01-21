@@ -9,8 +9,7 @@ const Card: FC<BoxProps> = ({ children, ...props }) => {
 
   return (
     <Box
-      py={6}
-      px={4}
+      p={6}
       borderRadius="md"
       border={`${borderWidth} solid`}
       borderColor={borderColor}

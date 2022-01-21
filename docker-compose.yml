@@ -9,3 +9,9 @@ services:
       DNS_SERVER: "1.1.1.1"
     ports:
       - "8080:8080"
+
+  frontend:
+    build:
+      context: frontend
+    ports:
+      - "3000:80"
