@@ -69,6 +69,9 @@ type DNSResponse struct {
 	// TTL is the time to live of the DNS record.
 	TTL uint32 `json:"ttl"`
 
+	// Preference is used for MX records.
+	Preference *uint16 `json:"priority,omitempty"`
+
 	// Name is used to define the name of the DNS record.
 	Name string `json:"name"`
 
@@ -222,13 +225,20 @@ func dns(g *gin.RouterGroup, log *zap.Logger) {
 							}
 						}
 
+						// Handle the priority for MX records.
+						var preference *uint16
+						if mx, ok := v.(*godns.MX); ok {
+							preference = &mx.Preference
+						}
+
 						// Get the response.
 						h := v.Header()
 						a[i] = DNSResponse{
-							Type:  recordType,
-							TTL:   h.Ttl,
-							Name:  h.Name,
-							Value: data,
+							Type:       recordType,
+							TTL:        h.Ttl,
+							Name:       h.Name,
+							Value:      data,
+							Preference: preference,
 						}
 					}
 					jsonResponses[recordType] = a
