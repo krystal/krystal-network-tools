@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/caddyserver/certmagic"
-	"github.com/gin-contrib/cors"
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
 	api "github.com/krystal/krystal-network-tools/backend/api_v1"
@@ -24,10 +23,18 @@ func main() {
 
 	// Make the gin server.
 	r := gin.New()
+
+	// Handle CORS.
+	r.Use(func(ctx *gin.Context) {
+		ctx.Header("Access-Control-Allow-Origin", "*")
+	})
+
+	// Handle trusted proxies.
 	if err := r.SetTrustedProxies(nil); err != nil {
 		logger.Fatal("Failed to set trusted proxies", zap.Error(err))
 	}
-	r.Use(cors.Default())
+
+	// Add the rest of the middleware/routes.
 	r.Use(ginzap.Ginzap(logger, time.RFC3339, true))
 	r.Use(ginzap.RecoveryWithZap(logger, true))
 	g := r.Group("/v1")
