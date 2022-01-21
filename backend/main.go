@@ -1,11 +1,14 @@
 package main
 
 import (
+	"github.com/caddyserver/certmagic"
+	"github.com/gin-contrib/cors"
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
 	api "github.com/krystal/krystal-network-tools/backend/api_v1"
 	"github.com/krystal/krystal-network-tools/backend/utils"
 	"go.uber.org/zap"
+	"os"
 	"time"
 )
 
@@ -21,11 +24,21 @@ func main() {
 
 	// Make the gin server.
 	r := gin.Default()
+	r.Use(cors.Default())
 	r.Use(ginzap.Ginzap(logger, time.RFC3339, true))
 	//r.Use(ginzap.RecoveryWithZap(logger, true))
 	g := r.Group("/v1")
 	api.Init(g, logger)
-	if err = r.Run(); err != nil {
-		logger.Fatal("Failed to run the server", zap.Error(err))
+
+	// Build the listener.
+	httpsHost := os.Getenv("HTTPS_HOST")
+	if httpsHost == "" {
+		if err = r.Run(); err != nil {
+			logger.Fatal("Failed to run the server", zap.Error(err))
+		}
+	} else {
+		if err = certmagic.HTTPS([]string{httpsHost}, r); err != nil {
+			logger.Fatal("Failed to run the server", zap.Error(err))
+		}
 	}
 }
