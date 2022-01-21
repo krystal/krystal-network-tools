@@ -17,15 +17,45 @@ type pingParams struct {
 	Interval uint `form:"interval"`
 }
 
+// PingErrorMessage is used to define the error message.
+type PingErrorMessage struct {
+	// IsTimeout is used to define if the error is a timeout.
+	IsTimeout bool `json:"is_timeout"`
+
+	// Message is used to define the error message.
+	Message string `json:"message"`
+}
+
+// PingResponse is used to define an item in the ping response.
+type PingResponse struct {
+	// Error is not nil if there was an error.
+	Error *PingErrorMessage `json:"error,omitempty"`
+
+	// Hostname is used to define the hostname. If it is blank, it means the rDNS lookup is not available.
+	Hostname string `json:"hostname,omitempty"`
+
+	// Latency is used to define the latency.
+	Latency *uint64 `json:"latency,omitempty"`
+}
+
 func ping(g *gin.RouterGroup) {
 	g.GET("/:hostnameOrIp", func(ctx *gin.Context) {
 		// Get the hostname or IP.
 		hostnameOrIp := ctx.Param("hostnameOrIp")
 
+		// Defines if this is JSON.
+		isJson := ctx.ContentType() == "application/json"
+
 		// Bind the ping params.
 		var p pingParams
 		if err := ctx.BindQuery(&p); err != nil {
-			ctx.String(400, "unable to parse query params: %s", err.Error())
+			if isJson {
+				ctx.JSON(400, map[string]string{
+					"message": err.Error(),
+				})
+			} else {
+				ctx.String(400, "unable to parse query params: %s", err.Error())
+			}
 			return
 		}
 
@@ -41,19 +71,28 @@ func ping(g *gin.RouterGroup) {
 		// Attempt to make the initial pinger to get the IP address.
 		pinger, err := goping.NewPinger(hostnameOrIp)
 		if err != nil {
-			ctx.String(400, "unable to resolve %s: %s", hostnameOrIp, err.Error())
+			if isJson {
+				ctx.JSON(400, map[string]string{
+					"message": err.Error(),
+				})
+			} else {
+				ctx.String(400, "unable to resolve %s: %s", hostnameOrIp, err.Error())
+			}
 			return
 		}
 		addr := pinger.IPAddr()
 
 		// Attempt a rdns lookup.
 		hostnameOrIp = addr.String()
+		hostname := ""
 		if hosts, _ := net.LookupAddr(hostnameOrIp); hosts != nil && len(hosts) > 0 {
 			hostnameOrIp += " [" + hosts[0] + "]"
+			hostname = hosts[0]
 		}
 
 		// Defines all responses.
-		responses := []string{}
+		strResponses := []string{}
+		jsonResponses := []*PingResponse{}
 
 		// Make sure the interval is less than or equal to 1 second.
 		if p.Interval > 1000 {
@@ -70,7 +109,13 @@ func ping(g *gin.RouterGroup) {
 				// Make the new pinger.
 				pinger, err = goping.NewPinger(addr.String())
 				if err != nil {
-					ctx.String(400, "unable to resolve %s: %s", hostnameOrIp, err.Error())
+					if isJson {
+						ctx.JSON(400, map[string]string{
+							"message": err.Error(),
+						})
+					} else {
+						ctx.String(400, "unable to resolve %s: %s", hostnameOrIp, err.Error())
+					}
 					return
 				}
 			}
@@ -124,23 +169,53 @@ func ping(g *gin.RouterGroup) {
 
 			// Wait for the channel.
 			if err = <-errChan; err != nil {
-				ctx.String(400, "unable to ping %s: %s", hostnameOrIp, err.Error())
+				if isJson {
+					ctx.JSON(400, map[string]string{
+						"message": err.Error(),
+					})
+				} else {
+					ctx.String(400, "unable to ping %s: %s", hostnameOrIp, err.Error())
+				}
 				return
 			}
 
 			// Log timeouts.
 			s := pinger.Statistics()
 			if len(s.Rtts) == 0 {
-				responses = append(responses, fmt.Sprintf("unable to ping %s: response timeout", hostnameOrIp))
+				if isJson {
+					jsonResponses = append(jsonResponses, &PingResponse{
+						Error: &PingErrorMessage{
+							IsTimeout: true,
+							Message:   "response timeout",
+						},
+						Hostname: hostname,
+					})
+				} else {
+					strResponses = append(strResponses,
+						fmt.Sprintf("unable to ping %s: response timeout", hostnameOrIp))
+				}
 				continue
 			}
 
 			// Log a successful ping.
-			responses = append(responses,
-				fmt.Sprintf("%d bytes from %s (time=%dms)", pinger.Size, hostnameOrIp, s.Rtts[0].Milliseconds()))
+			if isJson {
+				u := uint64(s.Rtts[0].Milliseconds())
+				jsonResponses = append(jsonResponses, &PingResponse{
+					Hostname: hostname,
+					Latency:  &u,
+				})
+			} else {
+				strResponses = append(strResponses,
+					fmt.Sprintf("%d bytes from %s (time=%dms)", pinger.Size, hostnameOrIp,
+						s.Rtts[0].Milliseconds()))
+			}
 		}
 
 		// Return the responses.
-		ctx.String(200, strings.Join(responses, "\n"))
+		if isJson {
+			ctx.JSON(200, jsonResponses)
+		} else {
+			ctx.String(200, strings.Join(strResponses, "\n"))
+		}
 	})
 }

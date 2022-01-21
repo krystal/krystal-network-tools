@@ -13,11 +13,23 @@ func whois(g *gin.RouterGroup) {
 		// Do the WHOIS lookup.
 		result, err := gowhois.Whois(hostOrIp)
 		if err != nil {
-			context.String(400, "WHOIS lookup failed: %s", err.Error())
+			if context.ContentType() == "application/json" {
+				context.JSON(400, map[string]string{
+					"message": err.Error(),
+				})
+			} else {
+				context.String(400, "WHOIS lookup failed: %s", err.Error())
+			}
 			return
 		}
 
 		// Return a 200.
-		context.String(200, result)
+		if context.ContentType() == "application/json" {
+			context.JSON(200, map[string]string{
+				"result": result,
+			})
+		} else {
+			context.String(200, result)
+		}
 	})
 }
