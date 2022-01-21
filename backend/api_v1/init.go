@@ -13,4 +13,5 @@ func Init(g *gin.RouterGroup, log *zap.Logger) {
 	traceroute(g.Group("/traceroute"), log)
 	bgp(g.Group("/bgp"))
 	whois(g.Group("/whois"))
+	rdns(g.Group("/rdns"))
 }
