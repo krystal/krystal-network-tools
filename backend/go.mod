@@ -5,16 +5,15 @@ go 1.18
 require (
 	github.com/caddyserver/certmagic v0.15.2
 	github.com/czerwonk/bird_socket v0.0.0-20190111125930-6c39d61f8853
-	github.com/gin-contrib/cors v1.3.1
 	github.com/gin-contrib/zap v0.0.2
 	github.com/gin-gonic/gin v1.7.7
 	github.com/go-ping/ping v0.0.0-20211130115550-779d1e919534
+	github.com/gobeam/stringy v0.0.5
 	github.com/hako/durafmt v0.0.0-20210608085754-5c1018a4e16b
 	github.com/likexian/whois v1.12.4
 	github.com/miekg/dns v1.1.45
 	github.com/pixelbender/go-traceroute v0.0.0-20190414152342-e631ab553a80
 	go.uber.org/zap v1.20.0
-	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 )
 
 require (
@@ -39,6 +38,7 @@ require (
 	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a // indirect
 	golang.org/x/mod v0.4.2 // indirect
 	golang.org/x/net v0.0.0-20210929193557-e81a3d93ecf6 // indirect
+	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c // indirect
 	golang.org/x/text v0.3.6 // indirect
 	golang.org/x/tools v0.1.6-0.20210726203631-07bc1bf47fb2 // indirect
