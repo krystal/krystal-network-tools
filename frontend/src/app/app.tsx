@@ -18,6 +18,7 @@ import Navigation from "../common/navigation/navigation";
 
 const App: FC = () => {
   const location = useLocation();
+  const isHomePage = location.pathname === "/";
 
   return (
     <Box data-testid="app" id="app" h="100%" w="100%">
@@ -26,10 +27,13 @@ const App: FC = () => {
 
         <Container maxW="container.lg" py={{ base: 6, md: 8 }}>
           <Grid
-            templateColumns={{ base: "1fr", md: "180px 1fr" }}
+            templateColumns={{
+              base: "1fr",
+              md: isHomePage ? "1fr" : "180px 1fr",
+            }}
             gap={{ base: 0, md: 16 }}
           >
-            {location.pathname !== "/" && (
+            {!isHomePage && (
               <GridItem display={{ base: "none", md: "block" }}>
                 <Navigation />
               </GridItem>
