@@ -1,7 +1,7 @@
 import endpoint from "./endpoint";
 
 test("endpoint", () => {
-  expect(endpoint("/:id", { id: 42 })).toEqual("/42/");
+  expect(endpoint("/:id", { id: 42 })).toEqual("/42");
   expect(endpoint("/:id", { id: 42, location: "123" })).toEqual(
     "/42?location=123"
   );
