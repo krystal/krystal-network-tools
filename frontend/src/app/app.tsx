@@ -35,7 +35,7 @@ const App: FC = () => {
           >
             {!isHomePage && (
               <GridItem display={{ base: "none", md: "block" }}>
-                <Navigation />
+                <Navigation position="sticky" top={6} />
               </GridItem>
             )}
 

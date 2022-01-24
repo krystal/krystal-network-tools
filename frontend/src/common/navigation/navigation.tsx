@@ -9,14 +9,16 @@ import {
   FcFeedIn,
 } from "react-icons/fc";
 
-import { Stack, Box } from "@chakra-ui/react";
+import { Stack, Box, BoxProps } from "@chakra-ui/react";
 
 import LogoIcon from "../icons/logo-icon";
 import NavigationItem from "./navigation-item";
 
-const Navigation: FC<{ showHomeLink?: boolean }> = ({ showHomeLink }) => {
+type NavigationProps = BoxProps & { showHomeLink?: boolean };
+
+const Navigation: FC<NavigationProps> = ({ showHomeLink, ...props }) => {
   return (
-    <Box as="aside" position="sticky" top={6}>
+    <Box as="aside" {...props}>
       <Stack as="aside" spacing={2}>
         {showHomeLink && (
           <NavigationItem to="/" icon={LogoIcon}>
