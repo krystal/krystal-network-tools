@@ -6,19 +6,18 @@ import { Button, Stack } from "@chakra-ui/react";
 import Form from "../../common/form/form";
 import FormTextField from "../../common/form/form-text-field";
 import FormSelectField from "../../common/form/form-select-field";
-import pingSchema from "./ping.schema";
-import { ServerLocation } from "../../api/get-api-url";
+import dnsSchema, { DnsType } from "./dns.schema";
 
-type PingFormProps = {
-  onSubmit: (values: z.infer<typeof pingSchema>) => void;
+type DnsFormProps = {
+  onSubmit: (values: z.infer<typeof dnsSchema>) => void;
   disabled?: boolean;
 };
 
-const PingForm: FC<PingFormProps> = ({ onSubmit, disabled }) => {
+const DnsForm: FC<DnsFormProps> = ({ onSubmit, disabled }) => {
   return (
     <Form
-      schema={pingSchema}
-      initialValues={{ host: "", location: ServerLocation.LONDON }}
+      schema={dnsSchema}
+      initialValues={{ host: "", type: DnsType.ANY }}
       onSubmit={onSubmit}
       render={(form) => (
         <Stack align="flex-end" spacing={3}>
@@ -27,18 +26,24 @@ const PingForm: FC<PingFormProps> = ({ onSubmit, disabled }) => {
             isDisabled={disabled}
             variant="filled"
             label="Hostname or IP address"
-            placeholder="Enter the address that you want to ping"
+            placeholder="Enter the address that you want to query"
           />
 
           <FormSelectField
-            name="location"
+            name="type"
             isDisabled={disabled}
             variant="filled"
-            label="Server location"
+            label="Record type"
           >
-            <option value={ServerLocation.LONDON}>London</option>
-            <option value={ServerLocation.US_EAST}>US East</option>
-            <option value={ServerLocation.US_WEST}>US West</option>
+            <option value={DnsType.ANY}>ANY</option>
+            <option value={DnsType.A}>A</option>
+            <option value={DnsType.AAAA}>AAAA</option>
+            <option value={DnsType.MX}>MX</option>
+            <option value={DnsType.NS}>NS</option>
+            <option value={DnsType.PTR}>PTR</option>
+            <option value={DnsType.SOA}>SOA</option>
+            <option value={DnsType.SRV}>SRV</option>
+            <option value={DnsType.TXT}>TXT</option>
           </FormSelectField>
 
           <Button
@@ -48,7 +53,7 @@ const PingForm: FC<PingFormProps> = ({ onSubmit, disabled }) => {
             isLoading={form.submitting}
             isDisabled={disabled}
           >
-            Start Pinging
+            Submit
           </Button>
         </Stack>
       )}
@@ -56,4 +61,4 @@ const PingForm: FC<PingFormProps> = ({ onSubmit, disabled }) => {
   );
 };
 
-export default PingForm;
+export default DnsForm;
