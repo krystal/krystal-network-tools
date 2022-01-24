@@ -43,7 +43,6 @@ const PingForm: FC<PingFormProps> = ({ onSubmit, disabled }) => {
             colorScheme="green"
             type="submit"
             px={6}
-            isLoading={form.submitting}
             isDisabled={disabled}
           >
             Start Pinging

@@ -82,7 +82,7 @@ const Ping: FC = () => {
             </HStack>
 
             {state.status === "error" && (
-              <Alert status="error">
+              <Alert status="error" variant="solid" borderRadius="sm">
                 <AlertIcon />
                 Could not connect to {state.host || "host"}
               </Alert>
