@@ -19,8 +19,8 @@ import { FaBars, FaMoon } from "react-icons/fa";
 import { BiNetworkChart } from "react-icons/bi";
 import { BsSunFill } from "react-icons/bs";
 
-import useQuery from "../hooks/use-query";
-import LogoIcon from "./logo-icon";
+import useQuery from "../../api/use-query";
+import LogoIcon from "../icons/logo-icon";
 import { Link } from "react-router-dom";
 import HeaderDrawer from "./header-drawer";
 import HeaderIconButton from "./header-icon-button";

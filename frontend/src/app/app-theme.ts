@@ -15,6 +15,6 @@ const colors = {
   },
 };
 
-const theme = extendTheme({ colors });
+const appTheme = extendTheme({ colors });
 
-export default theme;
+export default appTheme;

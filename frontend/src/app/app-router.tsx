@@ -3,15 +3,15 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import App from "./app";
 
-import Home from "../pages/home";
-import Ping from "../pages/ping";
-import Traceroute from "../pages/traceroute";
-import Whois from "../pages/whois";
-import Dns from "../pages/dns";
-import ReverseDns from "../pages/reverse-dns";
-import BgpRoutes from "../pages/bgp-route";
+import Home from "../pages/home/home.view";
+import Ping from "../pages/ping/ping.view";
+import Traceroute from "../pages/traceroute/traceroute.view";
+import Whois from "../pages/whois/whois.view";
+import Dns from "../pages/dns/dns.view";
+import ReverseDns from "../pages/reverse-dns/reverse-dns.view";
+import BgpRoutes from "../pages/bgp-route/bgp-route.view";
 
-const Router: FC = () => {
+const AppRouter: FC = () => {
   return (
     <BrowserRouter>
       <Routes>
@@ -29,4 +29,4 @@ const Router: FC = () => {
   );
 };
 
-export default Router;
+export default AppRouter;

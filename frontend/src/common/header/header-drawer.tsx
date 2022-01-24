@@ -9,7 +9,7 @@ import {
   useColorModeValue,
 } from "@chakra-ui/react";
 
-import Navigation from "./navigation";
+import Navigation from "../navigation/navigation";
 import { useLocation } from "react-router-dom";
 
 type HeaderDrawerProps = {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import getApiUrl from "../helpers/get-api-url";
-import { DEFAULT_REQUEST_OPTIONS, RequestOptions } from "../helpers/request";
+import getApiUrl from "./get-api-url";
+import { DEFAULT_REQUEST_OPTIONS, RequestOptions } from "./request";
 
 const useQuery = <T>(url: string, options: RequestOptions = {}) => {
   const [data, setData] = useState<T | null>(null);

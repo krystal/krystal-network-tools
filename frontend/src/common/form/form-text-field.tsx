@@ -7,14 +7,15 @@ import {
   FormLabel,
   FormErrorMessage,
 } from "@chakra-ui/form-control";
+import { getFieldError } from "./form.helpers";
 
-type TextFieldProps = ComponentPropsWithoutRef<typeof Input> & {
+type FormTextFieldProps = ComponentPropsWithoutRef<typeof Input> & {
   name: string;
   label: string;
   type?: "text" | "password" | "email" | "number";
 };
 
-const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
+const FormTextField = forwardRef<HTMLInputElement, FormTextFieldProps>(
   ({ name, label, ...props }, ref) => {
     const { input, meta } = useField(name, {
       parse:
@@ -23,17 +24,13 @@ const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
           : (v) => (v === "" ? null : v),
     });
 
-    const { touched, error, submitError, submitting } = meta;
-
-    const normalizedError = Array.isArray(error)
-      ? error.join(", ")
-      : error || submitError;
+    const normalizedError = getFieldError(meta);
 
     return (
-      <FormControl isInvalid={touched && normalizedError}>
+      <FormControl isInvalid={meta.touched && normalizedError}>
         {label && <FormLabel>{label}</FormLabel>}
         <InputGroup>
-          <Input {...input} disabled={submitting} {...props} ref={ref} />
+          <Input {...input} disabled={meta.submitting} {...props} ref={ref} />
         </InputGroup>
         <FormErrorMessage>{normalizedError}</FormErrorMessage>
       </FormControl>
@@ -41,4 +38,4 @@ const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
   }
 );
 
-export default TextField;
+export default FormTextField;

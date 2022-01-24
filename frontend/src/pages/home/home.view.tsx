@@ -18,7 +18,7 @@ import {
   FcInfo,
 } from "react-icons/fc";
 import { Link } from "react-router-dom";
-import Card from "../components/card";
+import Card from "../../common/card/card";
 
 type Page = {
   title: string;
