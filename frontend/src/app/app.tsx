@@ -7,7 +7,6 @@ import {
   Container,
   Grid,
   GridItem,
-  HStack,
 } from "@chakra-ui/react";
 
 import "./app.css";

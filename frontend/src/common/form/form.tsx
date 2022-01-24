@@ -1,4 +1,4 @@
-import { Alert, AlertIcon, AlertTitle, Box, Stack } from "@chakra-ui/react";
+import { Alert, AlertTitle, Box, Stack } from "@chakra-ui/react";
 import { Form as FinalForm } from "react-final-form";
 import { FORM_ERROR } from "final-form";
 import { formValidator } from "./form.helpers";
