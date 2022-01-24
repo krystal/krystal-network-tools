@@ -1,10 +1,11 @@
 import { FC, useState } from "react";
 
-import { Heading, Stack, Text } from "@chakra-ui/react";
+import { Heading, Stack } from "@chakra-ui/react";
 import Card from "../../common/card/card";
 import WhoisForm from "./whois-form";
 import request from "../../api/request";
 import endpoint from "../../api/endpoint";
+import Code from "../../common/code/code";
 
 type WhoisResponse = {
   result: string;
@@ -31,9 +32,7 @@ const Whois: FC = () => {
 
       {result !== null && (
         <Card>
-          {result.result.split("\n").map((line) => (
-            <Text mb={2}>{line}</Text>
-          ))}
+          <Code>{result.result}</Code>
         </Card>
       )}
     </Stack>

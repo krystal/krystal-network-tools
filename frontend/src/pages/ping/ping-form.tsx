@@ -25,7 +25,6 @@ const PingForm: FC<PingFormProps> = ({ onSubmit, disabled }) => {
           <FormTextField
             name="host"
             isDisabled={disabled}
-            variant="filled"
             label="Hostname or IP address"
             placeholder="Enter the address that you want to ping"
           />
@@ -33,7 +32,6 @@ const PingForm: FC<PingFormProps> = ({ onSubmit, disabled }) => {
           <FormSelectField
             name="location"
             isDisabled={disabled}
-            variant="filled"
             label="Server location"
           >
             <option value={ServerLocation.LONDON}>London</option>

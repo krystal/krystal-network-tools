@@ -23,8 +23,7 @@ const WhoisForm: FC<WhoisFormProps> = ({ onSubmit, disabled }) => {
           <FormTextField
             name="host"
             isDisabled={disabled}
-            variant="filled"
-            label="Host name or IP address"
+            label="Hostname or IP address"
             placeholder="Enter the address that you want to query"
           />
 

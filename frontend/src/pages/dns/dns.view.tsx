@@ -6,16 +6,7 @@ import DnsForm from "./dns-form";
 import request from "../../api/request";
 import endpoint from "../../api/endpoint";
 import { DnsType } from "./dns.schema";
-
-type SoaValue = {
-  expire: number;
-  mbox: string;
-  minttl: number;
-  ns: string;
-  refresh: number;
-  retry: number;
-  serial: number;
-};
+import Code from "../../common/code/code";
 
 type DnsResponse = {
   [key in DnsType]: {
@@ -23,7 +14,18 @@ type DnsResponse = {
     ttl: number;
     priority?: number;
     name: string;
-    value: string | string[] | SoaValue;
+    value:
+      | string
+      | string[]
+      | {
+          expire: number;
+          mbox: string;
+          minttl: number;
+          ns: string;
+          refresh: number;
+          retry: number;
+          serial: number;
+        };
   }[];
 };
 
@@ -48,7 +50,7 @@ const Dns: FC = () => {
 
       {result !== null && (
         <Card>
-          <pre>{JSON.stringify(result, null, 2)}</pre>
+          <Code>{JSON.stringify(result, null, 2)}</Code>
         </Card>
       )}
     </Stack>

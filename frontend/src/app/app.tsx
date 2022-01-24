@@ -1,7 +1,14 @@
 import { FC } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 
-import { Box, ChakraProvider, Container, HStack } from "@chakra-ui/react";
+import {
+  Box,
+  ChakraProvider,
+  Container,
+  Grid,
+  GridItem,
+  HStack,
+} from "@chakra-ui/react";
 
 import "./app.css";
 
@@ -18,17 +25,20 @@ const App: FC = () => {
         <Header />
 
         <Container maxW="container.lg" py={{ base: 6, md: 8 }}>
-          <HStack align="flex-start" spacing={{ base: 0, md: 16 }}>
+          <Grid
+            templateColumns={{ base: "1fr", md: "180px 1fr" }}
+            gap={{ base: 0, md: 16 }}
+          >
             {location.pathname !== "/" && (
-              <Box display={{ base: "none", md: "block" }} flexShrink={0}>
+              <GridItem display={{ base: "none", md: "block" }}>
                 <Navigation />
-              </Box>
+              </GridItem>
             )}
 
-            <Box w="100%">
+            <GridItem overflowX="hidden">
               <Outlet />
-            </Box>
-          </HStack>
+            </GridItem>
+          </Grid>
         </Container>
       </ChakraProvider>
     </Box>

@@ -24,7 +24,6 @@ const DnsForm: FC<DnsFormProps> = ({ onSubmit, disabled }) => {
           <FormTextField
             name="host"
             isDisabled={disabled}
-            variant="filled"
             label="Hostname or IP address"
             placeholder="Enter the address that you want to query"
           />
@@ -32,7 +31,6 @@ const DnsForm: FC<DnsFormProps> = ({ onSubmit, disabled }) => {
           <FormSelectField
             name="type"
             isDisabled={disabled}
-            variant="filled"
             label="Record type"
           >
             <option value={DnsType.ANY}>ANY</option>

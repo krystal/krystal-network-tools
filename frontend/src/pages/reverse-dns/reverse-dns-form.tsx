@@ -23,7 +23,6 @@ const ReverseDnsForm: FC<ReverseDnsFormProps> = ({ onSubmit, disabled }) => {
           <FormTextField
             name="ip"
             isDisabled={disabled}
-            variant="filled"
             label="IP address"
             placeholder="Enter the address that you want to lookup"
           />

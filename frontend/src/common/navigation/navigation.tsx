@@ -16,7 +16,7 @@ import NavigationItem from "./navigation-item";
 
 const Navigation: FC<{ showHomeLink?: boolean }> = ({ showHomeLink }) => {
   return (
-    <Box as="aside" position="sticky" top="0">
+    <Box as="aside" position="sticky" top={6}>
       <Stack as="aside" spacing={2}>
         {showHomeLink && (
           <NavigationItem to="/" icon={LogoIcon}>

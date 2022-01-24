@@ -1,5 +1,5 @@
 export const pingLatencyColor = (latency: number) => {
-  if (latency < 80) return "green";
-  if (latency > 140) return "red";
+  if (latency < 70) return "green";
+  if (latency > 110) return "red";
   return "orange";
 };

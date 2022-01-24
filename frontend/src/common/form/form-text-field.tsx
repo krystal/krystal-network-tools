@@ -30,7 +30,13 @@ const FormTextField = forwardRef<HTMLInputElement, FormTextFieldProps>(
       <FormControl isInvalid={meta.touched && normalizedError}>
         {label && <FormLabel>{label}</FormLabel>}
         <InputGroup>
-          <Input {...input} disabled={meta.submitting} {...props} ref={ref} />
+          <Input
+            {...input}
+            disabled={meta.submitting}
+            variant="filled"
+            {...props}
+            ref={ref}
+          />
         </InputGroup>
         <FormErrorMessage>{normalizedError}</FormErrorMessage>
       </FormControl>
