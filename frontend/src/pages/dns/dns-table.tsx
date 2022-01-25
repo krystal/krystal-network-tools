@@ -13,6 +13,7 @@ import {
   Td,
   Th,
   Thead,
+  Tooltip,
   Tr,
   useColorModeValue,
 } from "@chakra-ui/react";
@@ -54,7 +55,6 @@ const DnsTableHead: FC<DnsTableProps> = ({ record }) => {
 
 const DnsTableRow: FC<{ row: DnsResponse[DnsType][number] }> = ({ row }) => {
   const arrowColor = useColorModeValue("gray.200", "gray.900");
-  const wideValue = typeof row.value === "string";
 
   return (
     <Tr>
@@ -74,13 +74,17 @@ const DnsTableRow: FC<{ row: DnsResponse[DnsType][number] }> = ({ row }) => {
         <Td border="none">{row.priority}</Td>
       )}
 
-      <Td border="none" isTruncated colspan={wideValue ? 2 : 1}>
-        {typeof row.value === "string" && <Code>{row.value}</Code>}
+      {typeof row.value === "string" && (
+        <Td border="none" colspan={2} height="32px">
+          <Code isTruncated>{row.value}</Code>
+        </Td>
+      )}
 
-        {typeof row.value !== "string" && (
+      {typeof row.value !== "string" && (
+        <Td border="none">
           <Popover>
             <PopoverTrigger>
-              <Button size="xs" leftIcon={<FaEye />}>
+              <Button size="sm" leftIcon={<FaEye />}>
                 View value
               </Button>
             </PopoverTrigger>
@@ -95,8 +99,8 @@ const DnsTableRow: FC<{ row: DnsResponse[DnsType][number] }> = ({ row }) => {
               </PopoverBody>
             </PopoverContent>
           </Popover>
-        )}
-      </Td>
+        </Td>
+      )}
     </Tr>
   );
 };
