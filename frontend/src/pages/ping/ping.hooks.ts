@@ -9,7 +9,7 @@ export const useAverageLatency = (pings: Ping[]) => {
           pings.reduce((total, val) => {
             if (isNaN(val[0].latency)) return total;
             return total + val[0].latency;
-          }, 0) / pings.length
+          }, 0) / pings.filter((val) => !isNaN(val[0].latency)).length
         )
       : 0;
   }, [pings]);

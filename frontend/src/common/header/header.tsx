@@ -23,7 +23,7 @@ import useQuery from "../../api/use-query";
 import LogoIcon from "../icons/logo-icon";
 import { Link } from "react-router-dom";
 import HeaderDrawer from "./header-drawer";
-import HeaderIconButton from "./header-icon-button";
+import TooltipIconButton from "../tooltip-icon-button/tooltip-icon-button";
 
 const Header: FC = () => {
   const { data } = useQuery<{ ip: string }>("/ip");
@@ -51,12 +51,12 @@ const Header: FC = () => {
         >
           <GridItem>
             <HStack>
-              <HeaderIconButton
+              <TooltipIconButton
                 icon={FaBars}
                 onClick={() => setMenuIsOpen(true)}
                 label="Open menu"
               />
-              <HeaderIconButton
+              <TooltipIconButton
                 icon={useColorModeValue(FaMoon, BsSunFill)}
                 onClick={toggleColorMode}
                 label={useColorModeValue(

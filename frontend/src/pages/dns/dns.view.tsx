@@ -1,14 +1,14 @@
-import { FC, useState } from "react";
+import { FC, Fragment, useState } from "react";
 
-import { Heading, Stack } from "@chakra-ui/react";
+import { Heading, Stack, Text } from "@chakra-ui/react";
 import Card from "../../common/card/card";
 import DnsForm from "./dns-form";
 import request from "../../api/request";
 import endpoint from "../../api/endpoint";
 import { DnsType } from "./dns.schema";
-import Code from "../../common/code/code";
+import DnsTable from "./dns-table";
 
-type DnsResponse = {
+export type DnsResponse = {
   [key in DnsType]: {
     type: DnsType;
     ttl: number;
@@ -48,11 +48,25 @@ const Dns: FC = () => {
         />
       </Card>
 
-      {result !== null && (
-        <Card>
-          <Code>{JSON.stringify(result, null, 2)}</Code>
-        </Card>
-      )}
+      <Stack spacing={6}>
+        {result !== null &&
+          (Object.keys(result) as DnsType[]).map((type) => {
+            const record = result[type];
+
+            return (
+              <Fragment>
+                <Heading size="sm">{type}</Heading>
+                <Card overflowX="auto">
+                  {record.length > 0 ? (
+                    <DnsTable record={record} />
+                  ) : (
+                    <Text color="gray.500">There are no {type} records.</Text>
+                  )}
+                </Card>
+              </Fragment>
+            );
+          })}
+      </Stack>
     </Stack>
   );
 };

@@ -4,7 +4,7 @@ import { IconButton, Tooltip, Icon } from "@chakra-ui/react";
 
 import { IconType } from "react-icons";
 
-const HeaderIconButton: FC<{
+const TooltipIconButton: FC<{
   label: string;
   onClick?: () => void;
   icon: IconType;
@@ -22,4 +22,4 @@ const HeaderIconButton: FC<{
   );
 };
 
-export default HeaderIconButton;
+export default TooltipIconButton;
