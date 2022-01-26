@@ -9,7 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gobeam/stringy"
-	"github.com/krystal/krystal-network-tools/backend/utils"
+	dnsgetter "github.com/krystal/krystal-network-tools/backend/dns"
 	godns "github.com/miekg/dns"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -122,7 +122,7 @@ func dns(g *gin.RouterGroup, log *zap.Logger) {
 			qtype := v
 			wg.Go(func() error {
 				// Make the DNS connection.
-				conn, err := godns.Dial("tcp", utils.DNSServer)
+				conn, err := godns.Dial("tcp", dnsgetter.GetDNSServer(log))
 				if err != nil {
 					log.Error("failed to connect to dns server", zap.Error(err))
 					return err

@@ -23,8 +23,8 @@ type tracerouteParams struct {
 	TotalHops uint `form:"total_hops"`
 }
 
-// TraceResponse is used to define a response within the traceroute slice.
-type TraceResponse struct {
+// TraceItem is used to define an item within the traceroute slice.
+type TraceItem struct {
 	// Pings is used to define the latency of all pings sent.
 	Pings [3]*float64 `json:"pings"`
 
@@ -33,6 +33,15 @@ type TraceResponse struct {
 
 	// IPAddress is used to define the IP address of the host.
 	IPAddress string `json:"ip_address"`
+}
+
+// TraceResponse is used to define the response of the traceroute API.
+type TraceResponse struct {
+	// Traceroute is used to define the traceroute slice.
+	Traceroute []*TraceItem `json:"traceroute"`
+
+	// DestinationIP is used to define the destination IP address.
+	DestinationIP string `json:"destination_ip"`
 }
 
 func traceroute(g *gin.RouterGroup, log *zap.Logger) {
@@ -83,7 +92,7 @@ func traceroute(g *gin.RouterGroup, log *zap.Logger) {
 
 		// Go through each hop.
 		strResponses := []string{}
-		jsonResponses := []*TraceResponse{}
+		jsonResponses := []*TraceItem{}
 		var s *traceroutego.Session
 	hopFor:
 		for _, hop := range hops {
@@ -148,7 +157,7 @@ func traceroute(g *gin.RouterGroup, log *zap.Logger) {
 				if isJson {
 					// If this is nil, that's okay, that is how we repersent a timeout.
 					if replies[0] != nil {
-						jsonResponses = append(jsonResponses, &TraceResponse{
+						jsonResponses = append(jsonResponses, &TraceItem{
 							Pings:     pings,
 							RDNS:      rdns,
 							IPAddress: replies[0].IP.String(),
@@ -192,7 +201,10 @@ func traceroute(g *gin.RouterGroup, log *zap.Logger) {
 
 		// Return either JSON or string responses.
 		if isJson {
-			ctx.JSON(200, jsonResponses)
+			ctx.JSON(200, TraceResponse{
+				Traceroute:    jsonResponses,
+				DestinationIP: ipAddr.String(),
+			})
 		} else {
 			ctx.String(200, strings.Join(strResponses, "\n"))
 		}

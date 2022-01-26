@@ -31,8 +31,11 @@ type PingResponse struct {
 	// Error is not nil if there was an error.
 	Error *PingErrorMessage `json:"error,omitempty"`
 
-	// Hostname is used to define the hostname. If it is blank, it means the rDNS lookup is not available.
-	Hostname string `json:"hostname,omitempty"`
+	// IPAddress is used to define the IP address of the host.
+	IPAddress string `json:"ip_address"`
+
+	// Hostname is used to define the hostname. If it is nil, it means the rDNS lookup is not available.
+	Hostname *string `json:"hostname"`
 
 	// Latency is used to define the latency.
 	Latency *uint64 `json:"latency,omitempty"`
@@ -84,10 +87,11 @@ func ping(g *gin.RouterGroup) {
 
 		// Attempt a rdns lookup.
 		hostnameOrIp = addr.String()
-		hostname := ""
+		ip := pinger.IPAddr().String()
+		var hostname *string
 		if hosts, _ := net.LookupAddr(hostnameOrIp); hosts != nil && len(hosts) > 0 {
 			hostnameOrIp += " [" + hosts[0] + "]"
-			hostname = hosts[0]
+			hostname = &hosts[0]
 		}
 
 		// Defines all responses.
@@ -188,7 +192,8 @@ func ping(g *gin.RouterGroup) {
 							IsTimeout: true,
 							Message:   "response timeout",
 						},
-						Hostname: hostname,
+						IPAddress: ip,
+						Hostname:  hostname,
 					})
 				} else {
 					strResponses = append(strResponses,
@@ -201,8 +206,9 @@ func ping(g *gin.RouterGroup) {
 			if isJson {
 				u := uint64(s.Rtts[0].Milliseconds())
 				jsonResponses = append(jsonResponses, &PingResponse{
-					Hostname: hostname,
-					Latency:  &u,
+					Hostname:  hostname,
+					IPAddress: ip,
+					Latency:   &u,
 				})
 			} else {
 				strResponses = append(strResponses,

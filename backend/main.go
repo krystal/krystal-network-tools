@@ -1,14 +1,14 @@
 package main
 
 import (
+	"os"
+	"time"
+
 	"github.com/caddyserver/certmagic"
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
 	api "github.com/krystal/krystal-network-tools/backend/api_v1"
-	"github.com/krystal/krystal-network-tools/backend/utils"
 	"go.uber.org/zap"
-	"os"
-	"time"
 )
 
 func main() {
@@ -17,9 +17,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
-	// Initialize the server.
-	utils.InitializeDNSServer(logger)
 
 	// Make the gin server.
 	r := gin.New()

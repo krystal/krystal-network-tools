@@ -6,7 +6,7 @@
 //	- The getter function is protected.
 //	- The package name is changed.
 
-package utils
+package dns
 
 import (
 	"bytes"
