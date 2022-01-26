@@ -8,11 +8,13 @@ import endpoint from "../../api/endpoint";
 import Code from "../../common/code/code";
 
 type TracerouteResponse = {
-  hostname: string;
-};
+  pings: number[];
+  rdns: string;
+  ip_address: string;
+}[];
 
 const Traceroute: FC = () => {
-  const [result, setResult] = useState<TracerouteResponse | null>(null);
+  const [result, setResult] = useState<TracerouteResponse[] | null>(null);
 
   return (
     <Stack spacing={6}>
@@ -22,10 +24,23 @@ const Traceroute: FC = () => {
         <TracerouteForm
           disabled={false}
           onSubmit={async ({ host }) => {
-            const result = await request<TracerouteResponse>(
-              endpoint("/traceroute/:host", { host })
-            );
-            setResult(result);
+            setResult([]);
+
+            let hop = 1;
+
+            while (hop <= 64) {
+              const res = await request<TracerouteResponse>(
+                endpoint("/traceroute/:host", { host, hop })
+              );
+
+              setResult((state) => (state ? [...state, res] : [res]));
+
+              if (res[0] && res[0].ip_address === host) {
+                break;
+              } else {
+                hop++;
+              }
+            }
           }}
         />
       </Card>

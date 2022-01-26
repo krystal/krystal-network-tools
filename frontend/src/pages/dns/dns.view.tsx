@@ -1,12 +1,13 @@
 import { FC, Fragment, useState } from "react";
 
-import { Heading, Stack, Text } from "@chakra-ui/react";
+import { Box, Heading, Stack, Tag, Text } from "@chakra-ui/react";
 import Card from "../../common/card/card";
 import DnsForm from "./dns-form";
 import request from "../../api/request";
 import endpoint from "../../api/endpoint";
 import { DnsType } from "./dns.schema";
 import DnsTable from "./dns-table";
+import { getDnsColor } from "./dns.helpers";
 
 export type DnsResponse = {
   [key in DnsType]: {
@@ -55,7 +56,11 @@ const Dns: FC = () => {
 
             return (
               <Fragment>
-                <Heading size="sm">{type}</Heading>
+                <Box>
+                  <Tag colorScheme={getDnsColor(type)} size="lg">
+                    {type}
+                  </Tag>
+                </Box>
                 <Card overflowX="auto">
                   {record.length > 0 ? (
                     <DnsTable record={record} />
