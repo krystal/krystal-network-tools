@@ -1,45 +1,55 @@
 import { ServerLocation } from "../../api/get-api-url";
 
-export type PingResponse = { latency: number }[];
+export type TracerouteResponse = {
+  destination_ip: string;
+  traceroute: {
+    pings: number[];
+    rdns: string;
+    ip_address: string;
+  }[];
+};
 
-type PingState =
+type TracerouteState =
   | { status: "initial" }
   | {
       status: "started";
       host: string;
       location: ServerLocation;
-      pings: PingResponse[];
+      responses: TracerouteResponse[];
     }
   | {
       status: "stopped";
       host: string;
       location: ServerLocation;
-      pings: PingResponse[];
+      responses: TracerouteResponse[];
     }
   | { status: "error"; error: Error; host?: string };
 
-type PingAction =
+type TracerouteAction =
   | { type: "start"; host: string; location: ServerLocation }
   | { type: "stop" }
-  | { type: "ping"; ping: PingResponse }
+  | { type: "response"; response: TracerouteResponse }
   | { type: "error"; error: Error };
 
-const pingReducer = (state: PingState, action: PingAction): PingState => {
+const tracerouteReducer = (
+  state: TracerouteState,
+  action: TracerouteAction
+): TracerouteState => {
   switch (action.type) {
     case "start":
       return {
         status: "started",
         host: action.host,
         location: action.location,
-        pings: [],
+        responses: [],
       };
     case "stop":
       return state.status === "started"
         ? { ...state, status: "stopped" }
         : state;
-    case "ping":
+    case "response":
       return state.status === "started"
-        ? { ...state, pings: [...state.pings, action.ping] }
+        ? { ...state, responses: [...state.responses, action.response] }
         : state;
     case "error":
       return { ...state, status: "error", error: action.error };
@@ -48,4 +58,4 @@ const pingReducer = (state: PingState, action: PingAction): PingState => {
   }
 };
 
-export default pingReducer;
+export default tracerouteReducer;

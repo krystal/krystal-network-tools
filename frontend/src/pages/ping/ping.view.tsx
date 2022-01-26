@@ -1,4 +1,4 @@
-import { FC, useEffect, useReducer, useState } from "react";
+import { FC, useEffect, useReducer } from "react";
 
 import {
   Alert,
@@ -16,42 +16,38 @@ import {
 import endpoint from "../../api/endpoint";
 import request from "../../api/request";
 import Card from "../../common/card/card";
-import pingReducer from "./ping.reducer";
+import pingReducer, { PingResponse } from "./ping.reducer";
 import { pingLatencyColor } from "./ping.helpers";
 import { useAverageLatency } from "./ping.hooks";
 import PingForm from "./ping-form";
 
-type PingResponse = { latency: number }[];
-
 const Ping: FC = () => {
   const [state, dispatch] = useReducer(pingReducer, { status: "initial" });
-  const [pings, setPings] = useState<PingResponse[]>([]);
 
   const ping = (host: string) => {
     return request<PingResponse>(endpoint("/ping/:host", { host }))
       .then((data) => {
-        setPings((pings) => [...pings, data]);
+        dispatch({ type: "ping", ping: data });
       })
       .catch((error) => dispatch({ type: "error", error }));
   };
 
   useEffect(() => {
     if (state.status === "started") {
-      setPings([]);
-      const timer = window.setInterval(() => ping(state.host), 500);
-      return () => {
-        clearTimeout(timer);
-      };
+      if (state.pings.length >= 10) {
+        dispatch({ type: "stop" });
+      } else {
+        const timer = window.setInterval(() => ping(state.host), 500);
+        return () => {
+          clearTimeout(timer);
+        };
+      }
     }
   }, [state]);
 
-  useEffect(() => {
-    if (pings.length >= 10) {
-      dispatch({ type: "stop" });
-    }
-  }, [pings]);
-
-  const avg = useAverageLatency(pings);
+  const avg = useAverageLatency(
+    state.status === "started" || state.status === "stopped" ? state.pings : []
+  );
 
   return (
     <Stack spacing={6}>
@@ -70,7 +66,10 @@ const Ping: FC = () => {
         <Card>
           <Stack spacing={6}>
             <HStack justify="space-between">
-              <Tag colorScheme={pingLatencyColor(avg)}>{avg}ms</Tag>
+              <HStack>
+                {state.status === "started" && <Spinner size="sm" />}
+                <Tag colorScheme={pingLatencyColor(avg)}>{avg}ms</Tag>
+              </HStack>
               <Button
                 size="sm"
                 colorScheme="red"
@@ -88,27 +87,22 @@ const Ping: FC = () => {
               </Alert>
             )}
 
-            {state.status !== "error" &&
-              (pings.length ? (
-                <Stack>
-                  {pings.map((ping, i) => (
-                    <HStack key={i} justifyContent="space-between">
-                      <HStack>
-                        <Badge colorScheme="brand">ping</Badge>
-                        <Heading size="sm">{state.host}</Heading>
-                      </HStack>
-
-                      <Tag colorScheme={pingLatencyColor(ping[0].latency)}>
-                        {ping[0].latency}ms
-                      </Tag>
+            {state.status !== "error" && (
+              <Stack>
+                {state.pings.map((ping, i) => (
+                  <HStack key={i} justifyContent="space-between">
+                    <HStack>
+                      <Badge colorScheme="brand">ping</Badge>
+                      <Heading size="sm">{state.host}</Heading>
                     </HStack>
-                  ))}
-                </Stack>
-              ) : (
-                <Center p={1}>
-                  <Spinner size="lg" />
-                </Center>
-              ))}
+
+                    <Tag colorScheme={pingLatencyColor(ping[0].latency)}>
+                      {ping[0].latency}ms
+                    </Tag>
+                  </HStack>
+                ))}
+              </Stack>
+            )}
           </Stack>
         </Card>
       )}

@@ -1,20 +1,60 @@
-import { FC, useState } from "react";
+import { FC, useEffect, useReducer } from "react";
 
-import { Heading, Stack } from "@chakra-ui/react";
-import Card from "../../common/card/card";
-import TracerouteForm from "./traceroute-form";
-import request from "../../api/request";
+import {
+  Alert,
+  AlertIcon,
+  Badge,
+  Button,
+  Center,
+  Heading,
+  HStack,
+  Stack,
+  Tag,
+  Spinner,
+  SimpleGrid,
+  Text,
+} from "@chakra-ui/react";
+
 import endpoint from "../../api/endpoint";
+import request from "../../api/request";
+import Card from "../../common/card/card";
+import tracerouteReducer, { TracerouteResponse } from "./traceroute.reducer";
+import TracerouteForm from "./traceroute-form";
+import { pingLatencyColor } from "../ping/ping.helpers";
 import Code from "../../common/code/code";
-
-type TracerouteResponse = {
-  pings: number[];
-  rdns: string;
-  ip_address: string;
-}[];
+import TraceroutePings from "./traceroute-pings";
 
 const Traceroute: FC = () => {
-  const [result, setResult] = useState<TracerouteResponse[] | null>(null);
+  const [state, dispatch] = useReducer(tracerouteReducer, {
+    status: "initial",
+  });
+
+  const makeRequest = (host: string, hop: number) => {
+    return request<TracerouteResponse>(
+      endpoint("/traceroute/:host", { host, hop })
+    )
+      .then((data) => {
+        dispatch({ type: "response", response: data });
+      })
+      .catch((error) => dispatch({ type: "error", error }));
+  };
+
+  useEffect(() => {
+    if (state.status === "started") {
+      makeRequest(state.host, 1);
+    }
+  }, [state.status]);
+
+  useEffect(() => {
+    if (state.status === "started" && state.responses.length) {
+      const last = state.responses[state.responses.length - 1];
+      if (last.destination_ip === last.traceroute[0].ip_address) {
+        dispatch({ type: "stop" });
+      } else {
+        makeRequest(last.destination_ip, state.responses.length + 1);
+      }
+    }
+  }, [state]);
 
   return (
     <Stack spacing={6}>
@@ -22,32 +62,56 @@ const Traceroute: FC = () => {
 
       <Card>
         <TracerouteForm
-          disabled={false}
-          onSubmit={async ({ host }) => {
-            setResult([]);
-
-            let hop = 1;
-
-            while (hop <= 64) {
-              const res = await request<TracerouteResponse>(
-                endpoint("/traceroute/:host", { host, hop })
-              );
-
-              setResult((state) => (state ? [...state, res] : [res]));
-
-              if (res[0] && res[0].ip_address === host) {
-                break;
-              } else {
-                hop++;
-              }
-            }
+          disabled={state.status === "started"}
+          onSubmit={({ host, location }) => {
+            dispatch({ type: "start", host, location });
           }}
         />
       </Card>
 
-      {result !== null && (
+      {state.status !== "initial" && (
         <Card>
-          <Code>{JSON.stringify(result, null, 2)}</Code>
+          <Stack spacing={6}>
+            <HStack justify="space-between">
+              <HStack>
+                {state.status === "started" && <Spinner size="xs" />}
+                <Heading size="sm">{state.host}</Heading>
+              </HStack>
+              <Button
+                size="sm"
+                colorScheme="red"
+                isDisabled={state.status !== "started"}
+                onClick={() => dispatch({ type: "stop" })}
+              >
+                Stop
+              </Button>
+            </HStack>
+
+            {state.status === "error" && (
+              <Alert status="error" variant="solid" borderRadius="sm">
+                <AlertIcon />
+                Error getting traceroute for {state.host || "host"}
+              </Alert>
+            )}
+
+            {state.status !== "error" && (
+              <Stack>
+                {state.responses.map(({ traceroute }, i) => (
+                  <HStack key={i} justifyContent="space-between">
+                    <Stack>
+                      <Code>
+                        {traceroute[0].rdns
+                          ? traceroute[0].rdns
+                          : traceroute[0].ip_address}
+                      </Code>
+                    </Stack>
+
+                    <TraceroutePings pings={traceroute[0].pings} />
+                  </HStack>
+                ))}
+              </Stack>
+            )}
+          </Stack>
         </Card>
       )}
     </Stack>
