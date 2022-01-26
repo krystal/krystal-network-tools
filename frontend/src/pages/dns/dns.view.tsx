@@ -54,6 +54,8 @@ const Dns: FC = () => {
           (Object.keys(result) as DnsType[]).map((type) => {
             const record = result[type];
 
+            if (!record.length) return null;
+
             return (
               <Fragment>
                 <Box>
