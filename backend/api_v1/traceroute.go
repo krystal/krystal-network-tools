@@ -9,7 +9,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	traceroutego "github.com/pixelbender/go-traceroute/traceroute"
-	"go.uber.org/zap"
 )
 
 type tracerouteParams struct {
@@ -44,7 +43,7 @@ type TraceResponse struct {
 	DestinationIP string `json:"destination_ip"`
 }
 
-func traceroute(g *gin.RouterGroup, log *zap.Logger) {
+func traceroute(g *gin.RouterGroup) {
 	g.GET("/:hostnameOrIp", func(ctx *gin.Context) {
 		// Get the hostname or IP.
 		hostnameOrIp := ctx.Param("hostnameOrIp")
@@ -115,8 +114,7 @@ func traceroute(g *gin.RouterGroup, log *zap.Logger) {
 					// Make the session.
 					s, err = t.NewSession(ipAddr)
 					if err != nil {
-						ctx.String(500, "Internal Server Error")
-						log.Error("failed to start traceroute session", zap.Error(err))
+						ctx.Error(fmt.Errorf("failed to start traceroute session: %v", err.Error()))
 						return 0
 					}
 					ttl := int(hop)
@@ -125,8 +123,7 @@ func traceroute(g *gin.RouterGroup, log *zap.Logger) {
 					}
 					startTime := time.Now()
 					if err = s.Ping(ttl); err != nil {
-						ctx.String(500, "Internal Server Error")
-						log.Error("failed to ping host", zap.Error(err))
+						ctx.Error(fmt.Errorf("failed to ping: %v", err.Error()))
 						return 0
 					}
 

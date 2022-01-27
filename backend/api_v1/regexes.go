@@ -7,7 +7,7 @@ const ipRangePrefix = `^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4
 
 var (
 	// Defines regex for getting a IP range.
-	ipRangeRegex = regexp.MustCompile(ipRangePrefix + `(\/([0-9]|[1-2][0-9]|3[0-2]))?$`)
+	ipRangeRegex = regexp.MustCompile("(" + ipRangePrefix + `)\/([0-9]|[1-2][0-9]|3[0-2])$`)
 
 	// Defines regex for getting a IP.
 	ipRegex = regexp.MustCompile(ipRangePrefix + "$")

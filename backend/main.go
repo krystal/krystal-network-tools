@@ -8,6 +8,7 @@ import (
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
 	api "github.com/krystal/krystal-network-tools/backend/api_v1"
+	"github.com/krystal/krystal-network-tools/backend/dns"
 	"go.uber.org/zap"
 )
 
@@ -31,6 +32,26 @@ func main() {
 		}
 	})
 
+	// Handle internal server errors.
+	r.Use(func(ctx *gin.Context) {
+		ctx.Next()
+		if len(ctx.Errors) != 0 {
+			ferr := ctx.Errors[0]
+			if ferr.Type == gin.ErrorTypePublic {
+				if ctx.ContentType() == "application/json" {
+					ctx.JSON(400, map[string]string{
+						"message": ferr.Error(),
+					})
+				} else {
+					ctx.String(400, ferr.Error())
+				}
+			} else {
+				ctx.String(500, "Internal Server Error")
+				logger.Error("internal server error", zap.Error(ctx.Errors[0]))
+			}
+		}
+	})
+
 	// Handle trusted proxies.
 	if err := r.SetTrustedProxies(nil); err != nil {
 		logger.Fatal("Failed to set trusted proxies", zap.Error(err))
@@ -38,9 +59,10 @@ func main() {
 
 	// Add the rest of the middleware/routes.
 	r.Use(ginzap.Ginzap(logger, time.RFC3339, true))
-	r.Use(ginzap.RecoveryWithZap(logger, true))
+	r.Use(gin.Recovery())
+	//r.Use(ginzap.RecoveryWithZap(logger, true))
 	g := r.Group("/v1")
-	api.Init(g, logger)
+	api.Init(g, logger, dns.GetDNSServer(logger))
 
 	// Build the listener.
 	httpsHost := os.Getenv("HTTPS_HOST")

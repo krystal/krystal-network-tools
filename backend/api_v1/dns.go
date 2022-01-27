@@ -2,14 +2,13 @@ package api_v1
 
 import (
 	"encoding/json"
-	"errors"
+	"fmt"
 	"reflect"
 	"sort"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gobeam/stringy"
-	dnsgetter "github.com/krystal/krystal-network-tools/backend/dns"
 	godns "github.com/miekg/dns"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -57,10 +56,6 @@ outerFor:
 	return json.Marshal(m)
 }
 
-type clientErrorWrapper struct {
-	error
-}
-
 // DNSResponse is used to define the JSON responses for the DNS API.
 type DNSResponse struct {
 	// Type is used to define the type of the record.
@@ -79,7 +74,7 @@ type DNSResponse struct {
 	Value json.RawMessage `json:"value"`
 }
 
-func dns(g *gin.RouterGroup, log *zap.Logger) {
+func dns(g *gin.RouterGroup, log *zap.Logger, dnsServer string) {
 	g.GET("/:recordType/:hostname", func(context *gin.Context) {
 		// Get the type and hostname from the URL.
 		recordType := context.Param("recordType")
@@ -122,7 +117,7 @@ func dns(g *gin.RouterGroup, log *zap.Logger) {
 			qtype := v
 			wg.Go(func() error {
 				// Make the DNS connection.
-				conn, err := godns.Dial("tcp", dnsgetter.GetDNSServer(log))
+				conn, err := godns.Dial("tcp", dnsServer)
 				if err != nil {
 					log.Error("failed to connect to dns server", zap.Error(err))
 					return err
@@ -146,7 +141,10 @@ func dns(g *gin.RouterGroup, log *zap.Logger) {
 				// Send the DNS message.
 				err = conn.WriteMsg(msg)
 				if err != nil {
-					return clientErrorWrapper{err}
+					return &gin.Error{
+						Err:  fmt.Errorf("failed to perform lookup: %v", err),
+						Type: gin.ErrorTypePublic,
+					}
 				}
 
 				// Read the DNS response.
@@ -164,11 +162,7 @@ func dns(g *gin.RouterGroup, log *zap.Logger) {
 
 		// Handle any errors.
 		if err := wg.Wait(); err != nil {
-			if errors.Is(err, clientErrorWrapper{}) {
-				context.String(400, "failed to perform lookup: "+err.Error())
-			} else {
-				context.String(500, "Internal Server Error")
-			}
+			context.Error(err)
 			return
 		}
 
@@ -204,8 +198,7 @@ func dns(g *gin.RouterGroup, log *zap.Logger) {
 								var err error
 								data, err = json.Marshal(reflectValue.FieldByName(f.Name).Interface())
 								if err != nil {
-									log.Error("failed to marshal json", zap.Error(err))
-									context.String(500, "Internal Server Error")
+									context.Error(fmt.Errorf("failed to marshal json: %v", err))
 									return
 								}
 								break
@@ -219,8 +212,7 @@ func dns(g *gin.RouterGroup, log *zap.Logger) {
 								RemoveKeys: []string{"Hdr"},
 							})
 							if err != nil {
-								log.Error("failed to marshal json", zap.Error(err))
-								context.String(500, "Internal Server Error")
+								context.Error(fmt.Errorf("failed to marshal json: %v", err))
 								return
 							}
 						}
