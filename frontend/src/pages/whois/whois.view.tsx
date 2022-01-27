@@ -1,6 +1,6 @@
 import { FC, useState } from "react";
 
-import { Heading, Stack } from "@chakra-ui/react";
+import { Heading, Stack, Text } from "@chakra-ui/react";
 import Card from "../../common/card/card";
 import WhoisForm from "./whois-form";
 import request from "../../api/request";
@@ -32,7 +32,24 @@ const Whois: FC = () => {
 
       {result !== null && (
         <Card>
-          <Code>{result.result}</Code>
+          <Code>
+            {result.result.split("\n").map((line) => {
+              const skip = line.includes(">>>") || line.includes("--");
+              if (line.match(/^(?![%#])[a-zA-Z0-9\s\-_/]{1,40}:/) && !skip) {
+                const [val, ...rest] = line.split(":");
+                return (
+                  <Text>
+                    <Text as="span" color="gray.500">
+                      {val}:
+                    </Text>
+                    {rest.join(":")}
+                  </Text>
+                );
+              } else {
+                return <Text>{line}</Text>;
+              }
+            })}
+          </Code>
         </Card>
       )}
     </Stack>

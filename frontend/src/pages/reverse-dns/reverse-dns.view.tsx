@@ -1,6 +1,6 @@
 import { FC, useState } from "react";
 
-import { Heading, Stack } from "@chakra-ui/react";
+import { Heading, HStack, Stack } from "@chakra-ui/react";
 import Card from "../../common/card/card";
 import ReverseDnsForm from "./reverse-dns-form";
 import request from "../../api/request";
@@ -12,6 +12,7 @@ type ReverseDnsResponse = {
 };
 
 const ReverseDns: FC = () => {
+  const [ip, setIp] = useState("");
   const [result, setResult] = useState<ReverseDnsResponse | null>(null);
 
   return (
@@ -25,6 +26,7 @@ const ReverseDns: FC = () => {
             const result = await request<ReverseDnsResponse>(
               endpoint("/rdns/:ip", { ip })
             );
+            setIp(ip);
             setResult(result);
           }}
         />
@@ -32,7 +34,12 @@ const ReverseDns: FC = () => {
 
       {result !== null && (
         <Card>
-          <Code>{JSON.stringify(result, null, 2)}</Code>
+          <Heading size="sm" mb={4}>
+            {ip}
+          </Heading>
+          <Code fontSize="lg" w="100%">
+            {result.hostname}
+          </Code>
         </Card>
       )}
     </Stack>
