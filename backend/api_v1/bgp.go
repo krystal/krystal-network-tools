@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -12,13 +13,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Defines the small community.
-const smallCommunityRegexStart = `\d+,\d+`
-
 // Defines the regex for a small and large bgp community.
 var (
-	smallCommunityRe = regexp.MustCompile(smallCommunityRegexStart)
-	largeCommunityRe = regexp.MustCompile(smallCommunityRegexStart + `,\d+`)
+	smallCommunityRe = regexp.MustCompile(`\d+,\d+`)
+	largeCommunityRe = regexp.MustCompile(`\d+, \d+, \d+`)
 )
 
 // Create a pool of 100KB pads.
@@ -36,6 +34,9 @@ type bgpLine struct {
 
 	// Line is used to store the BGP line.
 	Line string
+
+	// IsCont defines if this line is a continuation.
+	IsCont bool
 }
 
 // Used to define the BGP type.
@@ -63,8 +64,8 @@ func (v *bgpLine) Type() (bgpType, string) {
 		if strings.HasSuffix(v.Line, "Table ") {
 			return table, v.Line
 		}
-		if strings.Contains(v.Line, "Unreachable") {
-			return routeHeader, v.Line
+		if strings.Contains(v.Line, "unreachable") {
+			return routeHeader, strings.SplitN(v.Line, " ", 2)[0]
 		}
 	case "1008":
 		if strings.HasPrefix(v.Line, "Type:") {
@@ -111,6 +112,29 @@ type BGPRoute struct {
 
 	// LargeCommunity is used to define a large BGP community.
 	LargeCommunity []string `json:"large_community"`
+}
+
+// BGPRouteSlice is used to define a slice of BGP routes that implements sort.Interface.
+type BGPRouteSlice []*BGPRoute
+
+// Len implements sort.Interface.
+func (v BGPRouteSlice) Len() int {
+	return len(v)
+}
+
+// Swap implements sort.Interface.
+func (v BGPRouteSlice) Swap(i, j int) {
+	v[i], v[j] = v[j], v[i]
+}
+
+// Less implements sort.Interface.
+func (v BGPRouteSlice) Less(i, j int) bool {
+	x := v[i]
+	y := v[j]
+	if x.LocalPref != nil && y.LocalPref != nil && *x.LocalPref != *y.LocalPref {
+		return *x.LocalPref > *y.LocalPref
+	}
+	return len(x.AsPath) < len(y.AsPath)
 }
 
 func bgp(g *gin.RouterGroup) {
@@ -214,8 +238,9 @@ func bgp(g *gin.RouterGroup) {
 				// Add a new line with the last code.
 				lastCode := chunks[len(chunks)-1].Code
 				chunks = append(chunks, bgpLine{
-					Code: lastCode,
-					Line: strings.Trim(string(v[1:]), " \t\r"),
+					Code:   lastCode,
+					Line:   strings.Trim(string(v[1:]), " \t\r"),
+					IsCont: true,
 				})
 				continue
 			}
@@ -229,14 +254,14 @@ func bgp(g *gin.RouterGroup) {
 				Line: strings.Trim(string(v[5:]), " \t\r"),
 			})
 
-			// If v[5] is a space, we should break.
-			if v[5] == ' ' {
+			// If v[4] is a space, we should break.
+			if v[4] == ' ' {
 				break
 			}
 		}
 
 		// Handle making all the routes.
-		routes := []*BGPRoute{}
+		routes := BGPRouteSlice{}
 
 		// Loop through the chunks to make each route.
 		for _, v := range chunks {
@@ -260,32 +285,35 @@ func bgp(g *gin.RouterGroup) {
 						x = append(x, i)
 					}
 				}
-				routes = append(routes, &BGPRoute{AsPath: x})
+				routes[len(routes)-1].AsPath = x
 			case routeBgpLocalPref:
 				x, err := strconv.Atoi(clean)
 				if err != nil {
 					context.Error(err)
 					return
 				}
-				routes = append(routes, &BGPRoute{LocalPref: &x})
+				routes[len(routes)-1].LocalPref = &x
 			case routeBgpNextHop:
-				routes = append(routes, &BGPRoute{NextHop: &clean})
+				routes[len(routes)-1].NextHop = &clean
 			case routeBgpCommunity:
 				a := smallCommunityRe.FindAllString(clean, -1)
 				if a == nil {
 					context.Error(errors.New("string not correct format for bgp community"))
 					return
 				}
-				routes = append(routes, &BGPRoute{Community: a})
+				routes[len(routes)-1].Community = a
 			case routeBgpLargeCommunity:
 				a := largeCommunityRe.FindAllString(clean, -1)
 				if a == nil {
 					context.Error(errors.New("string not correct format for bgp large community"))
 					return
 				}
-				routes = append(routes, &BGPRoute{LargeCommunity: a})
+				routes[len(routes)-1].LargeCommunity = a
 			}
 		}
+
+		// Sort the slice.
+		sort.Sort(routes)
 
 		// Return the routes.
 		context.JSON(200, routes)
