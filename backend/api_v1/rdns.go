@@ -6,7 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func rdns(g *gin.RouterGroup) {
+func rdns(g group) {
 	g.GET("/:ip", func(ctx *gin.Context) {
 		ip := ctx.Param("ip")
 		hosts, err := net.LookupAddr(ip)
@@ -18,6 +18,7 @@ func rdns(g *gin.RouterGroup) {
 			} else {
 				ctx.String(400, "Failed to find IP")
 			}
+			return
 		}
 		if ctx.ContentType() == "application/json" {
 			ctx.JSON(200, map[string]string{

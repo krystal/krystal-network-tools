@@ -5,7 +5,7 @@ import (
 	gowhois "github.com/likexian/whois"
 )
 
-func whois(g *gin.RouterGroup) {
+func whois(g group) {
 	g.GET("/:hostOrIp", func(context *gin.Context) {
 		// Get the hostname or IP address.
 		hostOrIp := context.Param("hostOrIp")

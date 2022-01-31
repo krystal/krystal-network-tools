@@ -1,0 +1,55 @@
+% This is the RIPE Database query service.
+% The objects are in RPSL format.
+%
+% The RIPE Database is subject to Terms and Conditions.
+% See http://www.ripe.net/db/support/db-terms-conditions.pdf
+
+% Note: this output has been filtered.
+%       To receive output for a database update, use the "-B" flag.
+
+% Information related to '81.2.115.158 - 81.2.115.158'
+
+% Abuse contact for '81.2.115.158 - 81.2.115.158' is 'abuseripe@aa.net.uk'
+
+inetnum:        81.2.115.158 - 81.2.115.158
+country:        GB
+netname:        A44482A
+descr:          None specified
+admin-c:        CN8688-RIPE
+tech-c:         CN8688-RIPE
+mnt-by:         AA
+remarks:        ISP abuse policy at http://aa.net.uk/abuse.html
+remarks:        Router WAN address on site
+status:         ASSIGNED PA
+created:        2021-08-06T12:12:09Z
+last-modified:  2021-08-06T12:12:09Z
+source:         RIPE
+
+person:         Customer network
+address:        c/o Andrews & Arnold Ltd
+address:        Enterprise Court
+address:        Bracknell
+address:        RG12 1QS
+address:        GB
+phone:          +445555400000
+nic-hdl:        CN8688-RIPE
+remarks:        https://www.youtube.com/watch?v=QH2-TGUlwu4
+mnt-by:         AA
+created:        2021-08-06T11:48:05Z
+last-modified:  2021-08-24T10:04:47Z
+source:         RIPE
+
+% Information related to '81.2.64.0/18AS20712'
+
+route:          81.2.64.0/18
+descr:          AAISP
+origin:         AS20712
+mnt-by:         AA
+created:        2003-05-12T12:56:05Z
+last-modified:  2015-05-26T14:37:19Z
+source:         RIPE
+
+
+
+;; 
+;;  2022

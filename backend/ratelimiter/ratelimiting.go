@@ -2,6 +2,7 @@ package ratelimiter
 
 import (
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
@@ -15,11 +16,21 @@ type bucket struct {
 	reqs         uint64
 }
 
-// NewBucket is used to create a new ratelimit bucket for users of the site.
-func NewBucket(log *zap.Logger, maxUses uint64, per, backoff time.Duration) gin.HandlerFunc {
+type bucketContext interface {
+	ClientIP() string
+	ContentType() string
+	FullPath() string
+	JSON(status int, obj interface{})
+	String(status int, format string, values ...interface{})
+	Abort()
+	Value(key interface{}) interface{}
+}
+
+// Creates a new bucket. Is internal to allow for testing.
+func newBucket(log *zap.Logger, maxUses uint64, per, backoff time.Duration) func(bucketContext) {
 	m := map[string]*bucket{}
 	mu := sync.Mutex{}
-	return func(c *gin.Context) {
+	return func(c bucketContext) {
 		// Lock the global map whilst we handle this. We will almost always write.
 		mu.Lock()
 
@@ -49,7 +60,8 @@ func NewBucket(log *zap.Logger, maxUses uint64, per, backoff time.Duration) gin.
 
 			// Log a warning since this is potential abuse.
 			log.Warn("ratelimited user trying request", zap.String("client_ip", clientIp),
-				zap.String("handler_path", c.FullPath()), zap.String("path", c.Request.URL.Path))
+				zap.String("handler_path", c.FullPath()),
+				zap.String("path", c.Value(0).(*http.Request).URL.Path))
 
 			// Get the first timestamp.
 			durationFmt := "forever"
@@ -87,5 +99,13 @@ func NewBucket(log *zap.Logger, maxUses uint64, per, backoff time.Duration) gin.
 				mu.Unlock()
 			})
 		}
+	}
+}
+
+// NewBucket is used to create a new ratelimit bucket for users of the site.
+func NewBucket(log *zap.Logger, maxUses uint64, per, backoff time.Duration) gin.HandlerFunc {
+	b := newBucket(log, maxUses, per, backoff)
+	return func(context *gin.Context) {
+		b(context)
 	}
 }
