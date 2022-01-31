@@ -9,7 +9,7 @@ import (
 )
 
 // Init initializes the API.
-func Init(g *gin.RouterGroup, log *zap.Logger, dnsServer string) {
+func Init(g *gin.RouterGroup, log *zap.Logger, cachedDnsServer string) {
 	// Create the base bucket for a few types of requests.
 	pingingBucket := ratelimiter.NewBucket(log, 75, time.Minute, time.Minute*10)
 
@@ -18,7 +18,7 @@ func Init(g *gin.RouterGroup, log *zap.Logger, dnsServer string) {
 	ping(g.Group("/ping", pingingBucket))
 	dns(
 		g.Group("/dns", ratelimiter.NewBucket(log, 20, time.Hour, time.Minute*10)), log,
-		dnsServer,
+		cachedDnsServer,
 	)
 	traceroute(g.Group("/traceroute", pingingBucket))
 	bgp(g.Group("/bgp", ratelimiter.NewBucket(log, 20, time.Hour, time.Minute*10)))

@@ -3,14 +3,12 @@ package api_v1
 import (
 	"bytes"
 	"errors"
+	"github.com/gin-gonic/gin"
 	"net"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
-
-	"github.com/gin-gonic/gin"
 )
 
 // Defines the regex for a small and large bgp community.
@@ -18,14 +16,6 @@ var (
 	smallCommunityRe = regexp.MustCompile(`\d+,\d+`)
 	largeCommunityRe = regexp.MustCompile(`\d+, \d+, \d+`)
 )
-
-// Create a pool of 100KB pads.
-var padPool = sync.Pool{
-	New: func() interface{} {
-		x := make([]byte, 100*1024)
-		return &x
-	},
-}
 
 // bgpLine is a line of BGP data.
 type bgpLine struct {
@@ -138,9 +128,13 @@ func (v BGPRouteSlice) Less(i, j int) bool {
 }
 
 func bgp(g *gin.RouterGroup) {
-	g.GET("/:ip", func(context *gin.Context) {
+	f := func(context *gin.Context) {
 		// Get the IP address.
 		ip := context.Param("ip")
+		rangeChunk := context.Param("range")
+		if rangeChunk != "" {
+			ip += "/" + rangeChunk
+		}
 
 		// Defines if this is JSON.
 		isJson := context.ContentType() == "application/json"
@@ -168,24 +162,13 @@ func bgp(g *gin.RouterGroup) {
 			context.Error(err)
 			return
 		}
+		defer conn.Close()
 
-		// Get the buffer.
-		x := padPool.Get()
-		tmpBuf := *x.(*[]byte)
-
-		// Handle closing and returning memory to the pool. This either happens on return or when we've consumed it.
-		closed := false
-		handleFree := func() {
-			if closed {
-				return
-			}
-			_ = conn.Close()
-			padPool.Put(x)
-		}
-		defer handleFree()
+		// Allocate a 100KB page.
+		b := make([]byte, 100*1024)
 
 		// Drain the start sequence.
-		_, err = conn.Read(tmpBuf)
+		_, err = conn.Read(b)
 		if err != nil {
 			context.Error(err)
 			return
@@ -200,16 +183,15 @@ func bgp(g *gin.RouterGroup) {
 		}
 
 		// Read the response.
-		n, err := conn.Read(tmpBuf)
+		n, err := conn.Read(b)
 		if err != nil {
 			context.Error(err)
 			return
 		}
-		b := make([]byte, n)
-		copy(b, tmpBuf)
+		b = append(b, b[:n]...)
 
-		// Now we are done with bird, close the connection and return the pooled memory.
-		handleFree()
+		// Now we are done with bird, close the connection.
+		_ = conn.Close()
 
 		// Check if this is a bird syntax error. This would mean that the IP address/range is not valid.
 		// Note that no other errors are relevant here since we've already checked the IP address.
@@ -317,5 +299,7 @@ func bgp(g *gin.RouterGroup) {
 
 		// Return the routes.
 		context.JSON(200, routes)
-	})
+	}
+	g.GET("/:ip", f)
+	g.GET("/:ip/:range", f)
 }

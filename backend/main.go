@@ -62,7 +62,7 @@ func main() {
 	r.Use(gin.Recovery())
 	//r.Use(ginzap.RecoveryWithZap(logger, true))
 	g := r.Group("/v1")
-	api.Init(g, logger, dns.GetDNSServer(logger))
+	api.Init(g, logger, dns.GetCachedDNSServer(logger))
 
 	// Build the listener.
 	httpsHost := os.Getenv("HTTPS_HOST")

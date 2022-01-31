@@ -8,8 +8,8 @@ import (
 
 var portRe = regexp.MustCompile(":[0-9]+$")
 
-// GetDNSServer is used to get the DNS server.
-func GetDNSServer(log *zap.Logger) string {
+// GetCachedDNSServer is used to get the cache DNS server.
+func GetCachedDNSServer(log *zap.Logger) string {
 	// Handle the environment variable override.
 	s := os.Getenv("DNS_SERVER")
 	if s != "" {

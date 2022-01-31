@@ -14,6 +14,14 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+type dnsParams struct {
+	// Trace is used to define if the DNS record should be traced all the way to the nameserver.
+	Trace bool `form:"trace"`
+
+	// Cache is used to define if the DNS record should only use the DNS cache.
+	Cache bool `form:"cache"`
+}
+
 // Used to clean the case of things in a value for JSON and remove unwanted keys.
 type jsonCleanifier struct {
 	// Value is used to define the JSON value.
@@ -74,8 +82,29 @@ type DNSResponse struct {
 	Value json.RawMessage `json:"value"`
 }
 
-func dns(g *gin.RouterGroup, log *zap.Logger, dnsServer string) {
+type hostnameRecordType struct {
+	hostname   string
+	recordType uint16
+}
+
+func dns(g *gin.RouterGroup, log *zap.Logger, cachedDnsServer string) {
 	g.GET("/:recordType/:hostname", func(context *gin.Context) {
+		// Defines if this is JSON.
+		isJson := context.ContentType() == "application/json"
+
+		// Bind the params.
+		var params dnsParams
+		if err := context.BindQuery(&params); err != nil {
+			if isJson {
+				context.JSON(400, map[string]string{
+					"message": err.Error(),
+				})
+			} else {
+				context.String(400, "unable to parse query params: %s", err.Error())
+			}
+			return
+		}
+
 		// Get the type and hostname from the URL.
 		recordType := context.Param("recordType")
 		hostname := context.Param("hostname")
@@ -83,11 +112,9 @@ func dns(g *gin.RouterGroup, log *zap.Logger, dnsServer string) {
 			hostname += "."
 		}
 
-		// Defines if this is JSON.
-		isJson := context.ContentType() == "application/json"
-
 		// Make the record type upper case.
 		recordType = strings.ToUpper(recordType)
+		originRecordType := recordType
 
 		// Defines the record types.
 		recordTypes := []string{recordType}
@@ -96,27 +123,62 @@ func dns(g *gin.RouterGroup, log *zap.Logger, dnsServer string) {
 			context.String(400, "Invalid record type")
 			return
 		}
-		recordTypesPacket := []uint16{recordTypePacket}
+		recordTypeIdsOnly := []uint16{recordTypePacket}
+		recordTypesPacket := []hostnameRecordType{{
+			hostname:   hostname,
+			recordType: recordTypePacket,
+		}}
 		if recordType == "ANY" {
 			// Since DNS servers rarely support ANY, we need to manually handle it.
 			recordTypes = []string{"A", "AAAA", "CNAME", "MX", "NS", "PTR", "SOA", "SRV", "TXT"}
-			recordTypesPacket = make([]uint16, len(recordTypes))
+			recordTypeIdsOnly = make([]uint16, len(recordTypes))
+			recordTypesPacket = make([]hostnameRecordType, len(recordTypes))
 			for i, v := range recordTypes {
-				recordTypesPacket[i], _ = godns.StringToType[v]
+				x, _ := godns.StringToType[v]
+				recordTypeIdsOnly[i] = x
+				recordTypesPacket[i] = hostnameRecordType{
+					hostname:   hostname,
+					recordType: x,
+				}
 			}
 		}
 
-		// Defines the results.
-		results := make([]*godns.Msg, len(recordTypes))
+		// Handle the creation of all relevant DNS messages if trace is on.
+		if params.Trace {
+			// Get all relevant dot split.
+			dots := strings.Split(hostname, ".")
+
+			// Get the current end index.
+			currentEndIndex := len(dots) - 2
+
+			// Defines the current fragment.
+			currentFragment := ""
+
+			// Go through each end index.
+			for i := currentEndIndex; i > 0; i-- {
+				currentFragment = dots[i] + "." + currentFragment
+				for _, v := range recordTypeIdsOnly {
+					recordTypesPacket = append(recordTypesPacket, hostnameRecordType{
+						hostname:   currentFragment,
+						recordType: v,
+					})
+				}
+			}
+		}
 
 		// Go through each record to make the message.
+		results := make([]*godns.Msg, len(recordTypesPacket))
 		anyQclass := godns.StringToClass["IN"]
 		wg := errgroup.Group{}
 		for i, v := range recordTypesPacket {
 			resultPtr := &results[i]
-			qtype := v
+			qtypeAndHostname := v
 			wg.Go(func() error {
 				// Make the DNS connection.
+				dnsServer := cachedDnsServer
+				if !params.Cache {
+					dnsServer = "1.1.1.1:53"
+				}
 				conn, err := godns.Dial("tcp", dnsServer)
 				if err != nil {
 					log.Error("failed to connect to dns server", zap.Error(err))
@@ -133,8 +195,8 @@ func dns(g *gin.RouterGroup, log *zap.Logger, dnsServer string) {
 
 				// DNS servers prefer 1 message per request. Make the question.
 				msg.Question = []godns.Question{{
-					Name:   hostname,
-					Qtype:  qtype,
+					Name:   qtypeAndHostname.hostname,
+					Qtype:  qtypeAndHostname.recordType,
 					Qclass: anyQclass,
 				}}
 
@@ -172,14 +234,23 @@ func dns(g *gin.RouterGroup, log *zap.Logger, dnsServer string) {
 		// Handle formatting the results.
 		strResponses := []string{}
 		jsonResponses := map[string][]DNSResponse{}
-		var i int
-		for i, recordType = range recordTypes {
+		recordTypesLen := len(recordTypes)
+		for i, response := range results {
+			// Get the record type.
+			recordType = recordTypes[i%recordTypesLen]
+
+			// Continue if record type is not NS/ANY.
+			if recordType == "NS" && (originRecordType != "ANY" && originRecordType != "NS") {
+				continue
+			}
+
 			// Get the response from the DNS server.
-			response := results[i]
 			if response.Answer == nil {
 				// In the case that this is JSON, we don't want to return a nil array.
 				if isJson {
-					jsonResponses[recordType] = []DNSResponse{}
+					if _, ok = jsonResponses[recordType]; !ok {
+						jsonResponses[recordType] = []DNSResponse{}
+					}
 				}
 			} else {
 				if isJson {
@@ -233,7 +304,11 @@ func dns(g *gin.RouterGroup, log *zap.Logger, dnsServer string) {
 							Preference: preference,
 						}
 					}
-					jsonResponses[recordType] = a
+					if x, ok := jsonResponses[recordType]; ok {
+						jsonResponses[recordType] = append(x, a...)
+					} else {
+						jsonResponses[recordType] = a
+					}
 				} else {
 					// Use the string representation from the DNS library but remove a few chunks.
 					for _, v := range response.Answer {
