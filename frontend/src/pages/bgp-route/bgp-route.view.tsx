@@ -1,23 +1,22 @@
 import { FC, Fragment, useState } from "react";
 
-import { Heading, Stack } from "@chakra-ui/react";
+import { Heading, SimpleGrid, Stack, Text } from "@chakra-ui/react";
 import Card from "../../common/card/card";
 import BgpRouteForm from "./bgp-route-form";
 import request from "../../api/request";
 import endpoint from "../../api/endpoint";
 import Code from "../../common/code/code";
 
-type BgpRouteResponse = {
+export type BgpRouteResponse = {
   prefix: string;
   as_path: string[];
   local_pref: number;
   next_hop: string;
-  community: string[];
-  large_community: string[];
+  community: string[][];
+  large_community: string[][];
 }[];
 
 const BgpRoute: FC = () => {
-  const [ip, setIp] = useState("");
   const [result, setResult] = useState<BgpRouteResponse | null>(null);
 
   return (
@@ -31,7 +30,6 @@ const BgpRoute: FC = () => {
             const result = await request<BgpRouteResponse>(
               endpoint("/bgp/:ip", { ip })
             );
-            setIp(ip);
             setResult(result);
           }}
         />
@@ -44,7 +42,40 @@ const BgpRoute: FC = () => {
               <Heading size="sm" mb={4}>
                 {item.prefix}
               </Heading>
-              <Code>{JSON.stringify(item, null, 2)}</Code>
+              <Code display="block" py={4}>
+                <Stack>
+                  <SimpleGrid columns={2}>
+                    <Heading size="xs" fontFamily="monospace">
+                      Next hop
+                    </Heading>
+                    <Text>{item.next_hop}</Text>
+                  </SimpleGrid>
+                  <SimpleGrid columns={2}>
+                    <Heading size="xs" fontFamily="monospace">
+                      As path
+                    </Heading>
+                    <Text>{item.as_path?.join(", ")}</Text>
+                  </SimpleGrid>
+                  <SimpleGrid columns={2}>
+                    <Heading size="xs" fontFamily="monospace">
+                      Community
+                    </Heading>
+                    <Text>{item.community?.join(" - ")}</Text>
+                  </SimpleGrid>
+                  <SimpleGrid columns={2}>
+                    <Heading size="xs" fontFamily="monospace">
+                      Large community
+                    </Heading>
+                    <Text>{item.large_community?.join(" - ")}</Text>
+                  </SimpleGrid>
+                  <SimpleGrid columns={2}>
+                    <Heading size="xs" fontFamily="monospace">
+                      Local pref
+                    </Heading>
+                    <Text>{item.local_pref}</Text>
+                  </SimpleGrid>
+                </Stack>
+              </Code>
             </Card>
           ))}
         </Fragment>

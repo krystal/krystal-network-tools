@@ -13,7 +13,6 @@ import {
   Td,
   Th,
   Thead,
-  Tooltip,
   Tr,
   useColorModeValue,
 } from "@chakra-ui/react";
