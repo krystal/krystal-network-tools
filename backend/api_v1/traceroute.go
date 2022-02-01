@@ -131,7 +131,7 @@ func traceroute(g *gin.RouterGroup) {
 					select {
 					case r := <-s.Receive():
 						replies[i] = r
-						p := float64(time.Now().Sub(startTime).Nanoseconds() / 1000000)
+						p := float64(time.Now().Sub(startTime).Microseconds()) / 1000
 						pings[i] = &p
 					case <-time.After(time.Millisecond * time.Duration(p.Timeout)):
 						// Just a timeout. Do nothing.
