@@ -38,7 +38,7 @@ type PingResponse struct {
 	Hostname *string `json:"hostname"`
 
 	// Latency is used to define the latency.
-	Latency *uint64 `json:"latency,omitempty"`
+	Latency *float64 `json:"latency,omitempty"`
 }
 
 func ping(g *gin.RouterGroup) {
@@ -204,7 +204,7 @@ func ping(g *gin.RouterGroup) {
 
 			// Log a successful ping.
 			if isJson {
-				u := uint64(s.Rtts[0].Milliseconds())
+				u := float64(s.Rtts[0].Microseconds()) / 1000
 				jsonResponses = append(jsonResponses, &PingResponse{
 					Hostname:  hostname,
 					IPAddress: ip,
