@@ -23,22 +23,28 @@ const TraceroutePings: FC<TraceroutePingsProps> = ({ pings }) => {
   return (
     <Popover trigger="hover">
       <PopoverTrigger>
-        <Tag cursor="default" colorScheme={pingLatencyColor(avg)}>
-          {avg}ms
+        <Tag
+          cursor="default"
+          colorScheme={pingLatencyColor(avg)}
+          fontFamily={!pings.length ? "monospace" : "sans-serif"}
+        >
+          {!!pings.length ? `${avg}ms` : "*"}
         </Tag>
       </PopoverTrigger>
-      <PopoverContent w="auto">
-        <PopoverArrow />
-        <PopoverBody borderRadius="md">
-          <SimpleGrid columns={3} gap={2}>
-            {pings.map((ping, i) => (
-              <Tag key={i} colorScheme={pingLatencyColor(ping)}>
-                {ping ? `${ping}ms` : ""}
-              </Tag>
-            ))}
-          </SimpleGrid>
-        </PopoverBody>
-      </PopoverContent>
+      {!!pings.length && (
+        <PopoverContent w="auto">
+          <PopoverArrow />
+          <PopoverBody borderRadius="md">
+            <SimpleGrid columns={3} gap={2}>
+              {pings.map((ping, i) => (
+                <Tag key={i} colorScheme={pingLatencyColor(ping)}>
+                  {ping ? `${ping}ms` : ""}
+                </Tag>
+              ))}
+            </SimpleGrid>
+          </PopoverBody>
+        </PopoverContent>
+      )}
     </Popover>
   );
 };

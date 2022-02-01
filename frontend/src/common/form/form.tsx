@@ -7,19 +7,36 @@ import { FormComponent } from "./form.types";
 
 const Form: FormComponent = ({
   schema,
-  initialValues,
+  initialValues = {},
   onSubmit,
   render,
   ...props
 }) => {
   return (
     <FinalForm
-      initialValues={initialValues}
+      // Check if the initial values can be added from the URL search params
+      initialValues={Object.keys(initialValues).reduce((values, name) => {
+        const params = new URLSearchParams(window.location.search);
+        const param = params.get(name);
+        const value = param || (initialValues as any)[name];
+        return { ...values, [name]: value };
+      }, {})}
       validate={formValidator(schema)}
       onSubmit={async (...args) => {
         try {
           await onSubmit(...args);
+          const values = new URLSearchParams(args[0]);
+          // On a successful commit, add the form values to the search params
+          window.history.pushState(
+            {},
+            window.location.pathname,
+            window.location.origin +
+              window.location.pathname +
+              "?" +
+              values.toString()
+          );
         } catch (err) {
+          console.log({ err });
           return {
             [FORM_ERROR]:
               err instanceof Error
