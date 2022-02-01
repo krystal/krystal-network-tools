@@ -12,7 +12,7 @@ import (
 
 func Test_userIp(t *testing.T) {
 	// Allow the function to insert into the group as it normally would.
-	hn := mockGroup(t, "GET", "/ip", userIp)
+	hn := mockGroupSingleHn(t, "GET", "/ip", userIp)
 	if hn == nil {
 		return
 	}

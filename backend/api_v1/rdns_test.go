@@ -12,7 +12,7 @@ import (
 
 func Test_rdns(t *testing.T) {
 	// Allow the function to insert into the group as it normally would.
-	hn := mockGroup(t, "GET", "/:ip", rdns)
+	hn := mockGroupSingleHn(t, "GET", "/:ip", rdns)
 	if hn == nil {
 		return
 	}

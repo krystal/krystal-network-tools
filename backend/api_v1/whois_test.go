@@ -22,7 +22,7 @@ var (
 
 func Test_whois(t *testing.T) {
 	// Allow the function to insert into the group as it normally would.
-	hn := mockGroup(t, "GET", "/:hostOrIp", whois)
+	hn := mockGroupSingleHn(t, "GET", "/:hostOrIp", whois)
 	if hn == nil {
 		return
 	}
@@ -59,7 +59,18 @@ func Test_whois(t *testing.T) {
 			json: true,
 			addr: "one.one.one.one",
 		},
-		// TODO: tests for failures
+		{
+			name: "lookup fail text",
+			code: http.StatusBadRequest,
+			json: false,
+			addr: "",
+		},
+		{
+			name: "lookup fail json",
+			code: http.StatusBadRequest,
+			json: true,
+			addr: "",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

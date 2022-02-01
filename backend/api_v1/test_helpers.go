@@ -14,15 +14,19 @@ type mockHandler struct {
 	// NOT here for actual usage. Solely here to satisfy the interface.
 	gin.IRoutes
 
-	handlers []gin.HandlerFunc
-	method   string
-	path     string
+	handlers map[string][]gin.HandlerFunc
+	method   map[string]string
 }
 
 func (m *mockHandler) set(method string, path string, handlers []gin.HandlerFunc) gin.IRoutes {
-	m.method = method
-	m.path = path
-	m.handlers = handlers
+	if m.method == nil {
+		m.method = map[string]string{}
+	}
+	m.method[path] = method
+	if m.handlers == nil {
+		m.handlers = map[string][]gin.HandlerFunc{}
+	}
+	m.handlers[path] = handlers
 	return m
 }
 
@@ -30,25 +34,44 @@ func (m *mockHandler) GET(relativePath string, handlers ...gin.HandlerFunc) gin.
 	return m.set("GET", relativePath, handlers)
 }
 
-func mockGroup(t *testing.T, method, path string, f func(group)) gin.HandlerFunc {
+func mockGroupMultiHn(t *testing.T, paths []string, methods map[string]string, f func(group)) map[string]gin.HandlerFunc {
 	t.Helper()
 	m := mockHandler{}
 	f(&m)
-	if m.method == "" {
-		t.Error("no route set")
+	if len(m.handlers) != len(paths) {
+		t.Error(len(m.handlers), "routes set")
+		return nil
 	} else {
-		assert.Equal(t, method, m.method)
-		assert.Equal(t, path, m.path)
-		switch len(m.handlers) {
-		case 0:
-			t.Error("no handlers set")
-			return nil
-		case 1:
-			return m.handlers[0]
-		default:
-			t.Error("more than 1 handler is not supported")
-			return nil
+		newMap := map[string]gin.HandlerFunc{}
+		for _, path := range paths {
+			method := methods[path]
+			resultMethod, ok := m.method[path]
+			if ok {
+				assert.Equal(t, method, resultMethod)
+				hn := m.handlers[path]
+				switch len(hn) {
+				case 0:
+					t.Error("no handlers set")
+					return nil
+				case 1:
+					newMap[path] = hn[0]
+				default:
+					t.Error("more than 1 handler is not supported")
+					return nil
+				}
+			} else {
+				t.Error("no handler set for", path)
+			}
 		}
+		return newMap
 	}
-	return nil
+}
+
+func mockGroupSingleHn(t *testing.T, method, path string, f func(group)) gin.HandlerFunc {
+	t.Helper()
+	m := mockGroupMultiHn(t, []string{path}, map[string]string{path: method}, f)
+	if m == nil {
+		return nil
+	}
+	return m[path]
 }

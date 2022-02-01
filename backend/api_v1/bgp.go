@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"github.com/gin-gonic/gin"
+	"io"
 	"net"
+	"net/url"
 	"regexp"
 	"sort"
 	"strconv"
@@ -127,10 +129,14 @@ func (v BGPRouteSlice) Less(i, j int) bool {
 	return len(x.AsPath) < len(y.AsPath)
 }
 
-func bgp(g *gin.RouterGroup) {
+func makeBirdSocket() (io.ReadWriteCloser, error) {
+	return net.Dial("unix", "/run/bird/bird.ctl")
+}
+
+func bgp(g group, socketBuilder func() (io.ReadWriteCloser, error)) {
 	f := func(context *gin.Context) {
 		// Get the IP address.
-		ip := context.Param("ip")
+		ip, _ := url.PathUnescape(context.Param("ip"))
 		rangeChunk := context.Param("range")
 		if rangeChunk != "" {
 			ip += "/" + rangeChunk
@@ -157,7 +163,7 @@ func bgp(g *gin.RouterGroup) {
 		}
 
 		// Make the socket.
-		conn, err := net.Dial("unix", "/run/bird/bird.ctl")
+		conn, err := socketBuilder()
 		if err != nil {
 			context.Error(err)
 			return
@@ -188,7 +194,7 @@ func bgp(g *gin.RouterGroup) {
 			context.Error(err)
 			return
 		}
-		b = append(b, b[:n]...)
+		b = append([]byte(nil), b[:n]...)
 
 		// Now we are done with bird, close the connection.
 		_ = conn.Close()
