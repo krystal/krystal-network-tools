@@ -17,11 +17,12 @@ func Init(g *gin.RouterGroup, log *zap.Logger, cachedDnsServer string) {
 	userIp(g)
 	ping(g.Group("/ping", pingingBucket))
 	dns(
-		g.Group("/dns", ratelimiter.NewBucket(log, 20, time.Hour, time.Minute*10)), log,
+		//g.Group("/dns", ratelimiter.NewBucket(log, 20, time.Hour, time.Minute*10))
+		g.Group("/dns"), log,
 		cachedDnsServer,
 	)
-	traceroute(g.Group("/traceroute", pingingBucket))
-	bgp(g.Group("/bgp", ratelimiter.NewBucket(log, 20, time.Hour, time.Minute*10)))
-	whois(g.Group("/whois", ratelimiter.NewBucket(log, 20, time.Hour, time.Minute*10)))
-	rdns(g.Group("/rdns", ratelimiter.NewBucket(log, 40, time.Hour, time.Minute*10)))
+	traceroute(g.Group("/traceroute")) //, pingingBucket))
+	bgp(g.Group("/bgp"))               //, ratelimiter.NewBucket(log, 20, time.Hour, time.Minute*10)))
+	whois(g.Group("/whois"))           //, ratelimiter.NewBucket(log, 20, time.Hour, time.Minute*10)))
+	rdns(g.Group("/rdns"))             //, ratelimiter.NewBucket(log, 40, time.Hour, time.Minute*10)))
 }
