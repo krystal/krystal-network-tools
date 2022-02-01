@@ -45,7 +45,7 @@ const DnsTableHead: FC<DnsTableProps> = ({ record }) => {
           <Th border="none">Priority</Th>
         )}
 
-        <Th border="none" colspan={wideValue ? 2 : 1}>
+        <Th border="none" colSpan={wideValue ? 2 : 1}>
           Value
         </Th>
       </Tr>
@@ -75,7 +75,7 @@ const DnsTableRow: FC<{ row: DnsResponse[DnsType][number] }> = ({ row }) => {
       )}
 
       {typeof row.value === "string" && (
-        <Td border="none" colspan={2} height="32px">
+        <Td border="none" colSpan={2} height="32px">
           <Code isTruncated>{row.value}</Code>
         </Td>
       )}
@@ -111,8 +111,8 @@ const DnsTable: FC<DnsTableProps> = ({ record }) => {
       <DnsTableHead record={record} />
 
       <Tbody>
-        {record.map((row) => (
-          <DnsTableRow row={row} />
+        {record.map((row, index) => (
+          <DnsTableRow key={index} row={row} />
         ))}
       </Tbody>
     </Table>

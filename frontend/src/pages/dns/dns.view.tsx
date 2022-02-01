@@ -57,7 +57,7 @@ const Dns: FC = () => {
             if (!record.length) return null;
 
             return (
-              <Fragment>
+              <Fragment key={type}>
                 <Box>
                   <Tag colorScheme={getDnsColor(type)} size="lg">
                     {type}

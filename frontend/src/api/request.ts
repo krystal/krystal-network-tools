@@ -19,8 +19,8 @@ const request = async <T>(
   const url = getApiUrl(endpoint, location);
 
   const res = await fetch(url, { ...DEFAULT_REQUEST_OPTIONS, ...options });
-  if (!res.ok) throw new Error(res.statusText);
   const data = await res.json();
+  if (!res.ok) throw new Error(data.message || res.statusText);
   return data as T;
 };
 

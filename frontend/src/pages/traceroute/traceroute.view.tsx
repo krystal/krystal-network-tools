@@ -3,16 +3,11 @@ import { FC, useEffect, useReducer } from "react";
 import {
   Alert,
   AlertIcon,
-  Badge,
   Button,
-  Center,
   Heading,
   HStack,
   Stack,
-  Tag,
   Spinner,
-  SimpleGrid,
-  Text,
 } from "@chakra-ui/react";
 
 import endpoint from "../../api/endpoint";
@@ -20,7 +15,6 @@ import request from "../../api/request";
 import Card from "../../common/card/card";
 import tracerouteReducer, { TracerouteResponse } from "./traceroute.reducer";
 import TracerouteForm from "./traceroute-form";
-import { pingLatencyColor } from "../ping/ping.helpers";
 import Code from "../../common/code/code";
 import TraceroutePings from "./traceroute-pings";
 
@@ -43,12 +37,12 @@ const Traceroute: FC = () => {
     if (state.status === "started") {
       makeRequest(state.host, 1);
     }
-  }, [state.status]);
+  }, [state.status]); // eslint-disable-line
 
   useEffect(() => {
     if (state.status === "started" && state.responses.length) {
       const last = state.responses[state.responses.length - 1];
-      if (last.destination_ip === last.traceroute[0].ip_address) {
+      if (last.destination_ip === last.traceroute[0]?.ip_address) {
         dispatch({ type: "stop" });
       } else {
         makeRequest(last.destination_ip, state.responses.length + 1);
@@ -99,14 +93,16 @@ const Traceroute: FC = () => {
                 {state.responses.map(({ traceroute }, i) => (
                   <HStack key={i} justifyContent="space-between">
                     <Stack>
-                      <Code>
-                        {traceroute[0].rdns
-                          ? traceroute[0].rdns
-                          : traceroute[0].ip_address}
-                      </Code>
+                      {traceroute[0] ? (
+                        <Code>
+                          {traceroute[0].rdns || traceroute[0].ip_address}
+                        </Code>
+                      ) : (
+                        <Code>*</Code>
+                      )}
                     </Stack>
 
-                    <TraceroutePings pings={traceroute[0].pings} />
+                    <TraceroutePings pings={traceroute[0]?.pings || []} />
                   </HStack>
                 ))}
               </Stack>
