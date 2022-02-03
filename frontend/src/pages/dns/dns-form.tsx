@@ -7,6 +7,7 @@ import Form from "../../common/form/form";
 import FormTextField from "../../common/form/form-text-field";
 import FormSelectField from "../../common/form/form-select-field";
 import dnsSchema, { DnsType } from "./dns.schema";
+import FormSwitchField from "../../common/form/form-switch-field";
 
 type DnsFormProps = {
   onSubmit: (values: z.infer<typeof dnsSchema>) => void;
@@ -17,7 +18,7 @@ const DnsForm: FC<DnsFormProps> = ({ onSubmit, disabled }) => {
   return (
     <Form
       schema={dnsSchema}
-      initialValues={{ host: "", type: DnsType.ANY }}
+      initialValues={{ host: "", type: DnsType.ANY, trace: false }}
       onSubmit={onSubmit}
       render={(form) => (
         <Stack align="flex-end" spacing={3}>
@@ -43,6 +44,8 @@ const DnsForm: FC<DnsFormProps> = ({ onSubmit, disabled }) => {
             <option value={DnsType.SRV}>SRV</option>
             <option value={DnsType.TXT}>TXT</option>
           </FormSelectField>
+
+          <FormSwitchField name="trace" label="Full trace?" />
 
           <Button
             colorScheme="green"

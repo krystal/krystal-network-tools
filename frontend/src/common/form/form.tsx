@@ -14,10 +14,13 @@ const Form: FormComponent = ({
 }) => {
   return (
     <FinalForm
+      keepDirtyOnReinitialize
       // Check if the initial values can be added from the URL search params
       initialValues={Object.keys(initialValues).reduce((values, name) => {
         const params = new URLSearchParams(window.location.search);
-        const param = params.get(name);
+        let param: string | boolean | null = params.get(name);
+        if (param === "false") param = false;
+        if (param === "true") param = true;
         const value = param || (initialValues as any)[name];
         return { ...values, [name]: value };
       }, {})}

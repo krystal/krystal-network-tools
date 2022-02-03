@@ -45,7 +45,7 @@ const PingForm: FC<PingFormProps> = ({ onSubmit, disabled }) => {
             px={6}
             isDisabled={disabled}
           >
-            Start Pinging
+            Start Ping
           </Button>
         </Stack>
       )}

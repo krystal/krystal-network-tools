@@ -6,6 +6,7 @@ import { Button, Stack } from "@chakra-ui/react";
 import Form from "../../common/form/form";
 import FormTextField from "../../common/form/form-text-field";
 import reverseDnsSchema from "./reverse-dns.schema";
+import FormSwitchField from "../../common/form/form-switch-field";
 
 type ReverseDnsFormProps = {
   onSubmit: (values: z.infer<typeof reverseDnsSchema>) => void;
@@ -16,7 +17,7 @@ const ReverseDnsForm: FC<ReverseDnsFormProps> = ({ onSubmit, disabled }) => {
   return (
     <Form
       schema={reverseDnsSchema}
-      initialValues={{ ip: "" }}
+      initialValues={{ ip: "", trace: false }}
       onSubmit={onSubmit}
       render={(form) => (
         <Stack align="flex-end" spacing={3}>
@@ -26,6 +27,8 @@ const ReverseDnsForm: FC<ReverseDnsFormProps> = ({ onSubmit, disabled }) => {
             label="IP address"
             placeholder="Enter the address that you want to lookup"
           />
+
+          <FormSwitchField name="trace" label="Full trace?" />
 
           <Button
             colorScheme="green"

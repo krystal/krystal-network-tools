@@ -20,7 +20,7 @@ const App: FC = () => {
   const isHomePage = location.pathname === "/";
 
   return (
-    <Box data-testid="app" id="app" h="100%" w="100%">
+    <Box data-testid="app" id="app" minH="100%" w="100%">
       <ChakraProvider theme={appTheme}>
         <Header />
 
@@ -34,7 +34,7 @@ const App: FC = () => {
           >
             {!isHomePage && (
               <GridItem display={{ base: "none", md: "block" }}>
-                <Navigation position="sticky" top={24} zIndex={2} />
+                <Navigation position="sticky" top="85px" zIndex={2} />
               </GridItem>
             )}
 

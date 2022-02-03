@@ -7,6 +7,7 @@ const reverseDnsSchema = z.object({
       invalid_type_error: "A valid IP address must be provided",
     })
     .min(1, "An IP address is required"),
+  trace: z.boolean(),
 });
 
 export default reverseDnsSchema;

@@ -1,6 +1,6 @@
 import { FC, useState } from "react";
 
-import { Heading, HStack, Stack } from "@chakra-ui/react";
+import { Heading, Stack } from "@chakra-ui/react";
 import Card from "../../common/card/card";
 import ReverseDnsForm from "./reverse-dns-form";
 import request from "../../api/request";
@@ -22,9 +22,9 @@ const ReverseDns: FC = () => {
       <Card>
         <ReverseDnsForm
           disabled={false}
-          onSubmit={async ({ ip }) => {
+          onSubmit={async ({ ip, trace }) => {
             const result = await request<ReverseDnsResponse>(
-              endpoint("/rdns/:ip", { ip })
+              endpoint("/rdns/:ip", { ip, trace })
             );
             setIp(ip);
             setResult(result);

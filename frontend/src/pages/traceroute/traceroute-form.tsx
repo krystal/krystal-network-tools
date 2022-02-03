@@ -45,7 +45,7 @@ const TracerouteForm: FC<TracerouteFormProps> = ({ onSubmit, disabled }) => {
             px={6}
             isDisabled={disabled}
           >
-            Start Tracerouteing
+            Start Traceroute
           </Button>
         </Stack>
       )}

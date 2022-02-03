@@ -26,9 +26,10 @@ const BgpRoute: FC = () => {
       <Card>
         <BgpRouteForm
           disabled={false}
-          onSubmit={async ({ ip }) => {
+          onSubmit={async ({ ip, location }) => {
             const result = await request<BgpRouteResponse>(
-              endpoint("/bgp/:ip", { ip })
+              endpoint("/bgp/:ip", { ip }),
+              { location }
             );
             setResult(result);
           }}

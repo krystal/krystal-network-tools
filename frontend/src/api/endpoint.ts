@@ -1,4 +1,7 @@
-const endpoint = (url: string, params: { [name: string]: string | number }) => {
+const endpoint = (
+  url: string,
+  params: { [name: string]: string | number | boolean }
+) => {
   const searchParams = new URLSearchParams();
 
   if (!url.startsWith("/")) {

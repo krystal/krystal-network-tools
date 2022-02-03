@@ -33,6 +33,9 @@ export type DnsResponse = {
 const Dns: FC = () => {
   const [result, setResult] = useState<DnsResponse | null>(null);
 
+  const empty =
+    result && !Object.values(result).find((record) => !!record.length);
+
   return (
     <Stack spacing={6}>
       <Heading size="lg">DNS</Heading>
@@ -40,9 +43,9 @@ const Dns: FC = () => {
       <Card>
         <DnsForm
           disabled={false}
-          onSubmit={async ({ host, type }) => {
+          onSubmit={async ({ host, type, trace }) => {
             const result = await request<DnsResponse>(
-              endpoint("/dns/:type/:host", { host, type })
+              endpoint("/dns/:type/:host", { host, type, trace })
             );
             setResult(result);
           }}
@@ -50,7 +53,14 @@ const Dns: FC = () => {
       </Card>
 
       <Stack spacing={6}>
+        {result !== null && empty && (
+          <Card>
+            <Text color="gray.500">No DNS records were found.</Text>
+          </Card>
+        )}
+
         {result !== null &&
+          !empty &&
           (Object.keys(result) as DnsType[]).map((type) => {
             const record = result[type];
 

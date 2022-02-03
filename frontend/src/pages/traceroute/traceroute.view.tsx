@@ -17,15 +17,17 @@ import tracerouteReducer, { TracerouteResponse } from "./traceroute.reducer";
 import TracerouteForm from "./traceroute-form";
 import Code from "../../common/code/code";
 import TraceroutePings from "./traceroute-pings";
+import { ServerLocation } from "../../api/get-api-url";
 
 const Traceroute: FC = () => {
   const [state, dispatch] = useReducer(tracerouteReducer, {
     status: "initial",
   });
 
-  const makeRequest = (host: string, hop: number) => {
+  const makeRequest = (host: string, hop: number, location: ServerLocation) => {
     return request<TracerouteResponse>(
-      endpoint("/traceroute/:host", { host, hop })
+      endpoint("/traceroute/:host", { host, hop }),
+      { location }
     )
       .then((data) => {
         dispatch({ type: "response", response: data });
@@ -35,7 +37,7 @@ const Traceroute: FC = () => {
 
   useEffect(() => {
     if (state.status === "started") {
-      makeRequest(state.host, 1);
+      makeRequest(state.host, 1, state.location);
     }
   }, [state.status]); // eslint-disable-line
 
@@ -45,7 +47,11 @@ const Traceroute: FC = () => {
       if (last.destination_ip === last.traceroute[0]?.ip_address) {
         dispatch({ type: "stop" });
       } else {
-        makeRequest(last.destination_ip, state.responses.length + 1);
+        makeRequest(
+          last.destination_ip,
+          state.responses.length + 1,
+          state.location
+        );
       }
     }
   }, [state]);

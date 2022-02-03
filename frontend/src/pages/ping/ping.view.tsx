@@ -20,12 +20,15 @@ import pingReducer, { PingResponse } from "./ping.reducer";
 import { pingLatencyColor } from "./ping.helpers";
 import { useAverageLatency } from "./ping.hooks";
 import PingForm from "./ping-form";
+import { ServerLocation } from "../../api/get-api-url";
 
 const Ping: FC = () => {
   const [state, dispatch] = useReducer(pingReducer, { status: "initial" });
 
-  const ping = (host: string) => {
-    return request<PingResponse>(endpoint("/ping/:host", { host }))
+  const ping = (host: string, location: ServerLocation) => {
+    return request<PingResponse>(endpoint("/ping/:host", { host }), {
+      location,
+    })
       .then((data) => {
         dispatch({ type: "ping", ping: data });
       })
@@ -37,7 +40,10 @@ const Ping: FC = () => {
       if (state.pings.length >= 10) {
         dispatch({ type: "stop" });
       } else {
-        const timer = window.setInterval(() => ping(state.host), 500);
+        const timer = window.setInterval(
+          () => ping(state.host, state.location),
+          500
+        );
         return () => {
           clearTimeout(timer);
         };
