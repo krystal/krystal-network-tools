@@ -80,7 +80,7 @@ const Home: FC = () => {
           >
             <Stack align="center" justify="center" textAlign="center">
               <Icon w={10} h={10} as={page.icon} mb={4} />
-              <Heading size="lg">{page.title}</Heading>
+              <Heading size="md">{page.title}</Heading>
               <Text color={textColor}>{page.text}</Text>
             </Stack>
           </Card>
