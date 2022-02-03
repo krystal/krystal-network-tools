@@ -22,7 +22,7 @@ const Navigation: FC<NavigationProps> = ({ showHomeLink, ...props }) => {
       <Stack as="aside" spacing={2}>
         {showHomeLink && (
           <NavigationItem to="/" icon={LogoIcon}>
-            tools
+            Home
           </NavigationItem>
         )}
 

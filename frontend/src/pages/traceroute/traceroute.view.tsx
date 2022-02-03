@@ -52,7 +52,7 @@ const Traceroute: FC = () => {
 
   return (
     <Stack spacing={6}>
-      <Heading size="md">Traceroute</Heading>
+      <Heading size="lg">Traceroute</Heading>
 
       <Card>
         <TracerouteForm

@@ -26,7 +26,7 @@ const HeaderDrawer: FC<HeaderDrawerProps> = ({ isOpen, onClose }) => {
   }, [location]); //eslint-disable-line
 
   return (
-    <Drawer isOpen={isOpen} onClose={onClose} placement="left">
+    <Drawer isOpen={isOpen} onClose={onClose} placement="right">
       <DrawerOverlay />
       <DrawerContent bg={bg} p={4}>
         <DrawerCloseButton onClose={onClose} zIndex={2} />

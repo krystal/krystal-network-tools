@@ -12,7 +12,6 @@ type NavigationItemProps = {
 const NavigationItem: FC<NavigationItemProps> = ({ children, icon, to }) => {
   const active = useMatch(to);
 
-  const bgColor = useColorModeValue("gray.50", "gray.900");
   const activeColor = useColorModeValue("brand.500", "brand.200");
 
   return (
@@ -22,9 +21,8 @@ const NavigationItem: FC<NavigationItemProps> = ({ children, icon, to }) => {
         py={2}
         px={3}
         borderRadius="md"
-        bg={active ? bgColor : undefined}
         color={active ? activeColor : undefined}
-        _hover={{ bg: active ? bgColor : bgColor }}
+        _hover={{ color: activeColor }}
       >
         <Icon as={icon} w={5} h={5} mr={1} />
         <Text pr={5} fontWeight="bold">

@@ -17,7 +17,7 @@ const ReverseDns: FC = () => {
 
   return (
     <Stack spacing={6}>
-      <Heading size="md">Reverse DNS</Heading>
+      <Heading size="lg">Reverse DNS</Heading>
 
       <Card>
         <ReverseDnsForm

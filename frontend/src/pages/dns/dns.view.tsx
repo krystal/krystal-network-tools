@@ -35,7 +35,7 @@ const Dns: FC = () => {
 
   return (
     <Stack spacing={6}>
-      <Heading size="md">DNS</Heading>
+      <Heading size="lg">DNS</Heading>
 
       <Card>
         <DnsForm

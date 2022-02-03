@@ -38,7 +38,7 @@ const TraceroutePings: FC<TraceroutePingsProps> = ({ pings }) => {
             <SimpleGrid columns={3} gap={2}>
               {pings.map((ping, i) => (
                 <Tag key={i} colorScheme={pingLatencyColor(ping)}>
-                  {ping ? `${ping}ms` : ""}
+                  {ping >= 0 ? `${ping}ms` : ""}
                 </Tag>
               ))}
             </SimpleGrid>

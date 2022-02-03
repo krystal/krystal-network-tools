@@ -51,7 +51,7 @@ const Ping: FC = () => {
 
   return (
     <Stack spacing={6}>
-      <Heading size="md">Ping</Heading>
+      <Heading size="lg">Ping</Heading>
 
       <Card>
         <PingForm

@@ -16,7 +16,7 @@ const Whois: FC = () => {
 
   return (
     <Stack spacing={6}>
-      <Heading size="md">WHOIS</Heading>
+      <Heading size="lg">WHOIS</Heading>
 
       <Card>
         <WhoisForm

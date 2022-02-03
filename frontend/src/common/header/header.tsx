@@ -15,9 +15,9 @@ import {
   Tooltip,
 } from "@chakra-ui/react";
 
-import { FaBars, FaMoon } from "react-icons/fa";
+import { FaBars } from "react-icons/fa";
 import { BiNetworkChart } from "react-icons/bi";
-import { BsSunFill } from "react-icons/bs";
+import { BsSunFill, BsMoonStarsFill } from "react-icons/bs";
 
 import useQuery from "../../api/use-query";
 import LogoIcon from "../icons/logo-icon";
@@ -44,53 +44,23 @@ const Header: FC = () => {
       <HeaderDrawer isOpen={menuIsOpen} onClose={() => setMenuIsOpen(false)} />
 
       <Container maxW="container.lg">
-        <Grid
-          templateColumns={{ base: "auto 1fr 1fr", md: "1fr auto 1fr" }}
-          alignItems="center"
-          gap={3}
-        >
+        <Grid templateColumns={{ base: "1fr 1fr" }} alignItems="center" gap={3}>
           <GridItem>
-            <HStack>
-              <TooltipIconButton
-                icon={FaBars}
-                onClick={() => setMenuIsOpen(true)}
-                label="Open menu"
-              />
-              <TooltipIconButton
-                icon={useColorModeValue(FaMoon, BsSunFill)}
-                onClick={toggleColorMode}
-                label={useColorModeValue(
-                  "Switch to dark mode",
-                  "Switch to light mode"
-                )}
-              />
-            </HStack>
-          </GridItem>
+            <HStack spacing={3}>
+              <HStack as={Link} to="/">
+                <LogoIcon />
+              </HStack>
 
-          <GridItem
-            justify={{ base: "flex-start", md: "center" }}
-            order={{ base: -1, md: 0 }}
-          >
-            <HStack as={Link} to="/">
-              <LogoIcon />
-              <Heading display={{ base: "none", md: "block" }} size="md">
-                tools
-              </Heading>
-            </HStack>
-          </GridItem>
-
-          <GridItem>
-            <HStack justify="flex-end">
               {data?.ip && (
                 <Tooltip label="Your current IP address">
-                  <Tag variant="subtle" colorScheme="brand">
+                  <Tag variant="subtle" colorScheme="brand" size="sm">
                     <TagLeftIcon boxSize="12px" as={BiNetworkChart} />
                     <TagLabel
                       maxWidth={{
                         base: "120px",
-                        sm: "320px",
-                        md: "200px",
-                        lg: "320px",
+                        sm: "300px",
+                        md: "320px",
+                        lg: "400px",
                       }}
                       isTruncated
                     >
@@ -99,6 +69,24 @@ const Header: FC = () => {
                   </Tag>
                 </Tooltip>
               )}
+            </HStack>
+          </GridItem>
+
+          <GridItem>
+            <HStack justify="flex-end">
+              <TooltipIconButton
+                icon={useColorModeValue(BsMoonStarsFill, BsSunFill)}
+                onClick={toggleColorMode}
+                label={useColorModeValue(
+                  "Switch to dark mode",
+                  "Switch to light mode"
+                )}
+              />
+              <TooltipIconButton
+                icon={FaBars}
+                onClick={() => setMenuIsOpen(true)}
+                label="Open menu"
+              />
             </HStack>
           </GridItem>
         </Grid>

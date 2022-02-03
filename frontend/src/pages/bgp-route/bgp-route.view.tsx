@@ -21,7 +21,7 @@ const BgpRoute: FC = () => {
 
   return (
     <Stack spacing={6}>
-      <Heading size="md">BGP Route</Heading>
+      <Heading size="lg">BGP Route</Heading>
 
       <Card>
         <BgpRouteForm
@@ -45,31 +45,31 @@ const BgpRoute: FC = () => {
               <Code display="block" py={4}>
                 <Stack>
                   <SimpleGrid columns={2}>
-                    <Heading size="xs" fontFamily="monospace">
+                    <Heading size="xs" opacity={0.5} fontFamily="monospace">
                       Next hop
                     </Heading>
                     <Text>{item.next_hop}</Text>
                   </SimpleGrid>
                   <SimpleGrid columns={2}>
-                    <Heading size="xs" fontFamily="monospace">
+                    <Heading size="xs" opacity={0.5} fontFamily="monospace">
                       As path
                     </Heading>
                     <Text>{item.as_path?.join(", ")}</Text>
                   </SimpleGrid>
                   <SimpleGrid columns={2}>
-                    <Heading size="xs" fontFamily="monospace">
+                    <Heading size="xs" opacity={0.5} fontFamily="monospace">
                       Community
                     </Heading>
                     <Text>{item.community?.join(" - ")}</Text>
                   </SimpleGrid>
                   <SimpleGrid columns={2}>
-                    <Heading size="xs" fontFamily="monospace">
+                    <Heading size="xs" opacity={0.5} fontFamily="monospace">
                       Large community
                     </Heading>
                     <Text>{item.large_community?.join(" - ")}</Text>
                   </SimpleGrid>
                   <SimpleGrid columns={2}>
-                    <Heading size="xs" fontFamily="monospace">
+                    <Heading size="xs" opacity={0.5} fontFamily="monospace">
                       Local pref
                     </Heading>
                     <Text>{item.local_pref}</Text>
