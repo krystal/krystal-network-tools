@@ -39,6 +39,9 @@ const Header: FC = () => {
       borderBottom="1px solid"
       borderBottomColor={useColorModeValue("gray.200", "gray.800")}
       transition="border 0.2s ease"
+      position="sticky"
+      zIndex={2}
+      top="0"
       py={2}
     >
       <HeaderDrawer isOpen={menuIsOpen} onClose={() => setMenuIsOpen(false)} />
