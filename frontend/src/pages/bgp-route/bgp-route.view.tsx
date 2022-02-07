@@ -1,6 +1,6 @@
 import { FC, Fragment, useState } from "react";
 
-import { Heading, SimpleGrid, Stack, Text } from "@chakra-ui/react";
+import { Heading, Stack, Table, Td, Th, Tr } from "@chakra-ui/react";
 import Card from "../../common/card/card";
 import BgpRouteForm from "./bgp-route-form";
 import request from "../../api/request";
@@ -43,40 +43,41 @@ const BgpRoute: FC = () => {
               <Heading size="sm" mb={4}>
                 {item.prefix}
               </Heading>
-              <Code display="block" py={4}>
-                <Stack>
-                  <SimpleGrid columns={2}>
-                    <Heading size="xs" opacity={0.5} fontFamily="monospace">
-                      Next hop
-                    </Heading>
-                    <Text>{item.next_hop}</Text>
-                  </SimpleGrid>
-                  <SimpleGrid columns={2}>
-                    <Heading size="xs" opacity={0.5} fontFamily="monospace">
-                      As path
-                    </Heading>
-                    <Text>{item.as_path?.join(", ")}</Text>
-                  </SimpleGrid>
-                  <SimpleGrid columns={2}>
-                    <Heading size="xs" opacity={0.5} fontFamily="monospace">
-                      Community
-                    </Heading>
-                    <Text>{item.community?.join(" - ")}</Text>
-                  </SimpleGrid>
-                  <SimpleGrid columns={2}>
-                    <Heading size="xs" opacity={0.5} fontFamily="monospace">
-                      Large community
-                    </Heading>
-                    <Text>{item.large_community?.join(" - ")}</Text>
-                  </SimpleGrid>
-                  <SimpleGrid columns={2}>
-                    <Heading size="xs" opacity={0.5} fontFamily="monospace">
-                      Local pref
-                    </Heading>
-                    <Text>{item.local_pref}</Text>
-                  </SimpleGrid>
-                </Stack>
-              </Code>
+
+              <Table size="sm">
+                <Tr>
+                  <Th>Next hop</Th>
+                  <Td colspan={2}>
+                    <Code>{item.next_hop}</Code>
+                  </Td>
+                </Tr>
+                <Tr>
+                  <Th>As path</Th>
+                  <Td colspan={2}>
+                    <Code>{item.as_path?.join(", ")}</Code>
+                  </Td>
+                </Tr>
+                <Tr>
+                  <Th>Community</Th>
+                  <Td colspan={2}>
+                    <Code>{item.community?.join(" - ")}</Code>
+                  </Td>
+                </Tr>
+                {!!item.large_community && (
+                  <Tr>
+                    <Th>Large community</Th>
+                    <Td colspan={2}>
+                      <Code>{item.large_community?.join(" - ")}</Code>
+                    </Td>
+                  </Tr>
+                )}
+                <Tr>
+                  <Th>Local pref</Th>
+                  <Td colspan={2}>
+                    <Code>{item.local_pref}</Code>
+                  </Td>
+                </Tr>
+              </Table>
             </Card>
           ))}
         </Fragment>
