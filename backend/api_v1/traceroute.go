@@ -102,7 +102,7 @@ func traceroute(g *gin.RouterGroup) {
 
 		// Set the default timeout.
 		if p.Timeout == 0 || p.Timeout > 1000 {
-			p.Timeout = 200
+			p.Timeout = 1000
 		}
 
 		// Get the local interfaces.
@@ -114,7 +114,8 @@ func traceroute(g *gin.RouterGroup) {
 
 		// Find the relevant local IP.
 		var localIP net.IP
-		if ipAddr.To4() == nil {
+		is6 := ipAddr.To4() == nil
+		if is6 {
 			// Look for a IPv6 address.
 			for _, ifaceAddr := range ifaceAddrs {
 				if ipnet, ok := ifaceAddr.(*net.IPNet); ok && ipnet.IP.To4() == nil && !ipnet.IP.IsLoopback() {
@@ -141,90 +142,103 @@ func traceroute(g *gin.RouterGroup) {
 				// Get all needed replies.
 				pings := [3]*float64{}
 
-				// In this library, error is used solely to signify when the TTL has been
-				// sent before the request is done. We can very safely ignore this error.
-				// We may want to re-evaluate this in future releases of the library, but
-				// since we are likely just going to pin this, it does not make a huge difference.
-				res, _ := traceroutego.Traceroute(&traceroutego.TracerouteOptions{
-					SourcePort:      int(getPort()),
-					SourceAddr:      localIP,
-					ProbeType:       traceroutego.IcmpProbe,
-					DestinationAddr: ipAddr,
-					DestinationPort: 33434,
-					StartingTTL:     int(hop),
-					MaxTTL:          int(hop),
-					ProbeCount:      3,
-					ProbeTimeout:    time.Duration(p.Timeout) * time.Millisecond,
-				})
-
-				// Check the hop is there.
-				if len(res.Hops) != 1 {
-					ctx.Error(fmt.Errorf("probe count wrong"))
-					return 0
+				if is6 {
+					// Add 1 to the hop. The first hop will without fail always not work.
+					hop++
 				}
-				hopObj := res.Hops[0]
 
-				// Get the RDNS.
-				var rdns *string
-				var firstNonNull *traceroutego.ProbeResponse
-				for _, v := range hopObj.Responses {
-					if v.Success {
-						// Get the replying IP address.
-						replyingIp := v.Address
+				port := int(getPort())
+				for i := 0; i < 2; i++ {
+					// In this library, error is used solely to signify when the TTL has been
+					// sent before the request is done. We can very safely ignore this error.
+					// We may want to re-evaluate this in future releases of the library, but
+					// since we are likely just going to pin this, it does not make a huge difference.
+					res, _ := traceroutego.Traceroute(&traceroutego.TracerouteOptions{
+						SourcePort:      port,
+						SourceAddr:      localIP,
+						ProbeType:       traceroutego.IcmpProbe,
+						DestinationAddr: ipAddr,
+						DestinationPort: 33434,
+						StartingTTL:     int(hop),
+						MaxTTL:          int(hop),
+						ProbeCount:      3,
+						ProbeTimeout:    time.Duration(p.Timeout) * time.Millisecond,
+					})
 
-						// Get the RDNS.
-						if hosts, _ := net.LookupAddr(replyingIp.String()); hosts != nil && len(hosts) > 0 {
-							rdns = &hosts[0]
+					// Check the hop is there.
+					if len(res.Hops) != 1 {
+						ctx.Error(fmt.Errorf("probe count wrong"))
+						return 0
+					}
+					hopObj := res.Hops[0]
+
+					// Get the RDNS.
+					var rdns *string
+					var firstNonNull *traceroutego.ProbeResponse
+					for _, v := range hopObj.Responses {
+						if v.Success {
+							// Get the replying IP address.
+							replyingIp := v.Address
+
+							// Get the RDNS.
+							if hosts, _ := net.LookupAddr(replyingIp.String()); hosts != nil && len(hosts) > 0 {
+								rdns = &hosts[0]
+							}
+
+							// Set the value and break.
+							firstNonNull = &v
+							break
 						}
+					}
 
-						// Set the value and break.
-						firstNonNull = &v
+					// Handle adding all the pings.
+					for i, v := range hopObj.Responses {
+						if v.Success {
+							f := float64(v.Duration.Microseconds()) / 1000
+							pings[i] = &f
+						}
+					}
+
+					// Handle string or JSON formatting.
+					if isJson {
+						// If this is nil, that's okay, that is how we repersent a timeout.
+						if firstNonNull != nil {
+							jsonResponses = append(jsonResponses, &TraceItem{
+								Pings:     pings,
+								RDNS:      rdns,
+								IPAddress: firstNonNull.Address.String(),
+							})
+						}
+					} else {
+						if firstNonNull == nil {
+							strResponses = append(strResponses, strconv.FormatUint(uint64(hop), 10)+"\t*\t*\t*\t*\t")
+						} else {
+							resp := firstNonNull.Address.String()
+							if rdns != nil {
+								resp += " (" + *rdns + ")"
+							}
+							resp += "\t"
+							for _, pi := range pings {
+								if pi == nil {
+									resp += "*\t"
+								} else {
+									resp += fmt.Sprint(*pi) + "\t"
+								}
+							}
+							strResponses = append(strResponses, resp)
+						}
+					}
+
+					// Break the hop for loop if the IP is the same.
+					if firstNonNull != nil {
+						if ipAddr.Equal(firstNonNull.Address) {
+							return 1
+						}
 						break
 					}
 				}
 
-				// Handle adding all the pings.
-				for i, v := range hopObj.Responses {
-					if v.Success {
-						f := float64(v.Duration.Microseconds()) / 1000
-						pings[i] = &f
-					}
-				}
-
-				// Handle string or JSON formatting.
-				if isJson {
-					// If this is nil, that's okay, that is how we repersent a timeout.
-					if firstNonNull != nil {
-						jsonResponses = append(jsonResponses, &TraceItem{
-							Pings:     pings,
-							RDNS:      rdns,
-							IPAddress: firstNonNull.Address.String(),
-						})
-					}
-				} else {
-					if firstNonNull == nil {
-						strResponses = append(strResponses, strconv.FormatUint(uint64(hop), 10)+"\t*\t*\t*\t*\t")
-					} else {
-						resp := firstNonNull.Address.String()
-						if rdns != nil {
-							resp += " (" + *rdns + ")"
-						}
-						resp += "\t"
-						for _, pi := range pings {
-							if pi == nil {
-								resp += "*\t"
-							} else {
-								resp += fmt.Sprint(*pi) + "\t"
-							}
-						}
-						strResponses = append(strResponses, resp)
-					}
-				}
-
-				// Break the hop for loop if the IP is the same.
-				if firstNonNull != nil && ipAddr.Equal(firstNonNull.Address) {
-					return 1
-				}
+				// Process the next hop.
 				return 2
 			})()
 

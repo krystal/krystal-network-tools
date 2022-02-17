@@ -11,6 +11,3 @@ services:
     volumes:
       - "./regions.yml:/var/app/regions.yml"
       - /run/bird/bird.ctl:/run/bird/bird.ctl
-    ports:
-      - "80:80"
-      - "443:443"
