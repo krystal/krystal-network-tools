@@ -1,0 +1,16 @@
+version: "3.9"
+
+services:
+  tool:
+    privileged: true
+    build: .
+    network_mode: host
+    env_file: .env
+    environment:
+      DNS_SERVER: "1.1.1.1"
+    volumes:
+      - "./regions.yml:/var/app/regions.yml"
+      - /run/bird/bird.ctl:/run/bird/bird.ctl
+    ports:
+      - "80:80"
+      - "443:443"
