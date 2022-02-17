@@ -1,18 +1,42 @@
 package main
 
 import (
+	"embed"
+	"io/fs"
+	"net/http"
 	"os"
 	"time"
 
 	"github.com/caddyserver/certmagic"
 	ginzap "github.com/gin-contrib/zap"
+	"github.com/gin-gonic/contrib/static"
 	"github.com/gin-gonic/gin"
 	api "github.com/krystal/krystal-network-tools/backend/api_v1"
 	"github.com/krystal/krystal-network-tools/backend/dns"
 	"go.uber.org/zap"
 )
 
+//go:embed frontend_blobs
+var frontendBlobs embed.FS
+
+type serveFsStaticImpl struct {
+	http.FileSystem
+}
+
+func (i serveFsStaticImpl) Exists(prefix string, path string) bool {
+	_, err := i.FileSystem.Open(path)
+	return err == nil
+}
+
+var _ static.ServeFileSystem = serveFsStaticImpl{}
+
 func main() {
+	// Sub the frontend blob.
+	f, err := fs.Sub(frontendBlobs, "frontend_blobs")
+	if err != nil {
+		panic(err)
+	}
+
 	// Make a zap logger.
 	logger, err := zap.NewProduction()
 	if err != nil {
@@ -21,6 +45,12 @@ func main() {
 
 	// Make the gin server.
 	r := gin.New()
+
+	// Handle initializing the frontend HTML routes.
+	initFrontend(r, f, logger)
+
+	// Add the static files.
+	r.Use(static.Serve("/", serveFsStaticImpl{http.FS(f)}))
 
 	// Handle CORS.
 	r.Use(func(ctx *gin.Context) {
@@ -59,8 +89,7 @@ func main() {
 
 	// Add the rest of the middleware/routes.
 	r.Use(ginzap.Ginzap(logger, time.RFC3339, true))
-	r.Use(gin.Recovery())
-	//r.Use(ginzap.RecoveryWithZap(logger, true))
+	r.Use(ginzap.RecoveryWithZap(logger, true))
 	g := r.Group("/v1")
 	api.Init(g, logger, dns.GetCachedDNSServer(logger))
 

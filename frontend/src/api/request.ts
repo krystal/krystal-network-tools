@@ -1,7 +1,7 @@
-import getApiUrl, { ServerLocation } from "./get-api-url";
+import getApiUrl, { getLocationById, locations } from "./server-locations";
 
 export type RequestOptions = RequestInit & {
-  location?: ServerLocation;
+  location?: string;
 };
 
 export const DEFAULT_REQUEST_OPTIONS: RequestOptions = {
@@ -16,7 +16,7 @@ const request = async <T>(
 ) => {
   const { location, ...options } = requestOptions;
 
-  const url = getApiUrl(endpoint, location);
+  const url = getApiUrl(endpoint, location ? getLocationById(location)! : locations[0]);
 
   const res = await fetch(url, { ...DEFAULT_REQUEST_OPTIONS, ...options });
   const data = await res.json();

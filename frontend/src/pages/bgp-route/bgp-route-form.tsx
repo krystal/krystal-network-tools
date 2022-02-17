@@ -7,7 +7,7 @@ import Form from "../../common/form/form";
 import FormTextField from "../../common/form/form-text-field";
 import bgpRouteSchema from "./bgp-route.schema";
 import FormSelectField from "../../common/form/form-select-field";
-import { ServerLocation } from "../../api/get-api-url";
+import { locations } from "../../api/server-locations";
 
 type BgpRouteFormProps = {
   onSubmit: (values: z.infer<typeof bgpRouteSchema>) => void;
@@ -18,7 +18,7 @@ const BgpRouteForm: FC<BgpRouteFormProps> = ({ onSubmit, disabled }) => {
   return (
     <Form
       schema={bgpRouteSchema}
-      initialValues={{ ip: "", location: ServerLocation.LONDON }}
+      initialValues={{ ip: "", location: locations[0].id }}
       onSubmit={onSubmit}
       render={(form) => (
         <Stack align="flex-end" spacing={3}>
@@ -34,9 +34,11 @@ const BgpRouteForm: FC<BgpRouteFormProps> = ({ onSubmit, disabled }) => {
             isDisabled={disabled}
             label="Server location"
           >
-            <option value={ServerLocation.LONDON}>London</option>
-            <option value={ServerLocation.US_EAST}>US East</option>
-            <option value={ServerLocation.US_WEST}>US West</option>
+            {
+              locations.map((location, index) => <option key={index} value={location.id}>
+                {location.name}
+              </option>)
+            }
           </FormSelectField>
 
           <Button

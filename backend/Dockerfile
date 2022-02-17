@@ -4,6 +4,7 @@ COPY go.mod .
 COPY go.sum .
 RUN go mod download
 COPY . .
+RUN rm -rf frontend_blobs && mkdir frontend_blobs && touch frontend_blobs/.keep
 RUN go build -o main
 
 FROM alpine:3.15

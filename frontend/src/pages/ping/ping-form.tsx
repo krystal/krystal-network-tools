@@ -7,7 +7,7 @@ import Form from "../../common/form/form";
 import FormTextField from "../../common/form/form-text-field";
 import FormSelectField from "../../common/form/form-select-field";
 import pingSchema from "./ping.schema";
-import { ServerLocation } from "../../api/get-api-url";
+import { locations } from "../../api/server-locations";
 
 type PingFormProps = {
   onSubmit: (values: z.infer<typeof pingSchema>) => void;
@@ -18,7 +18,7 @@ const PingForm: FC<PingFormProps> = ({ onSubmit, disabled }) => {
   return (
     <Form
       schema={pingSchema}
-      initialValues={{ host: "", location: ServerLocation.LONDON }}
+      initialValues={{ host: "", location: locations[0].id }}
       onSubmit={onSubmit}
       render={(form) => (
         <Stack align="flex-end" spacing={3}>
@@ -34,9 +34,11 @@ const PingForm: FC<PingFormProps> = ({ onSubmit, disabled }) => {
             isDisabled={disabled}
             label="Server location"
           >
-            <option value={ServerLocation.LONDON}>London</option>
-            <option value={ServerLocation.US_EAST}>US East</option>
-            <option value={ServerLocation.US_WEST}>US West</option>
+            {
+              locations.map((location, index) => <option key={index} value={location.id}>
+                {location.name}
+              </option>)
+            }
           </FormSelectField>
 
           <Button

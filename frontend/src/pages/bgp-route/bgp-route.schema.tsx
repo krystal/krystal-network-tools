@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { ServerLocation } from "../../api/get-api-url";
 
 const bgpRouteSchema = z.object({
   ip: z
@@ -8,7 +7,7 @@ const bgpRouteSchema = z.object({
       invalid_type_error: "A valid IP address must be provided",
     })
     .min(1, "An IP address is required"),
-  location: z.nativeEnum(ServerLocation),
+  location: z.string(),
 });
 
 export default bgpRouteSchema;

@@ -1,5 +1,3 @@
-import { ServerLocation } from "../../api/get-api-url";
-
 export type PingResponse = { latency: number }[];
 
 type PingState =
@@ -7,19 +5,19 @@ type PingState =
   | {
       status: "started";
       host: string;
-      location: ServerLocation;
+      location: string;
       pings: PingResponse[];
     }
   | {
       status: "stopped";
       host: string;
-      location: ServerLocation;
+      location: string;
       pings: PingResponse[];
     }
   | { status: "error"; error: Error; host?: string };
 
 type PingAction =
-  | { type: "start"; host: string; location: ServerLocation }
+  | { type: "start"; host: string; location: string }
   | { type: "stop" }
   | { type: "ping"; ping: PingResponse }
   | { type: "error"; error: Error };

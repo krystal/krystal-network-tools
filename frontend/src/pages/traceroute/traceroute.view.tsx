@@ -17,14 +17,13 @@ import tracerouteReducer, { TracerouteResponse } from "./traceroute.reducer";
 import TracerouteForm from "./traceroute-form";
 import Code from "../../common/code/code";
 import TraceroutePings from "./traceroute-pings";
-import { ServerLocation } from "../../api/get-api-url";
 
 const Traceroute: FC = () => {
   const [state, dispatch] = useReducer(tracerouteReducer, {
     status: "initial",
   });
 
-  const makeRequest = (host: string, hop: number, location: ServerLocation) => {
+  const makeRequest = (host: string, hop: number, location: string) => {
     return request<TracerouteResponse>(
       endpoint("/traceroute/:host", { host, hop }),
       { location }

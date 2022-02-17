@@ -33,12 +33,12 @@ const Whois: FC = () => {
       {result !== null && (
         <Card>
           <Code>
-            {result.result.split("\n").map((line) => {
+            {result.result.split("\n").map((line, index) => {
               const skip = line.includes(">>>") || line.includes("--");
               if (line.match(/^(?![%#])[a-zA-Z0-9\s\-_/]{1,40}:/) && !skip) {
                 const [val, ...rest] = line.split(":");
                 return (
-                  <Text>
+                  <Text key={index}>
                     <Text as="span" color="gray.500">
                       {val}:
                     </Text>
@@ -46,7 +46,7 @@ const Whois: FC = () => {
                   </Text>
                 );
               } else {
-                return <Text>{line}</Text>;
+                return <Text key={index}>{line}</Text>;
               }
             })}
           </Code>

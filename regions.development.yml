@@ -1,0 +1,6 @@
+- name: Local
+  id: local
+  url: /
+- name: Remote
+  id: remote
+  url: https://london.k.tools.io/

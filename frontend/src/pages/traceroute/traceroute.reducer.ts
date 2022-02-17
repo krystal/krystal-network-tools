@@ -1,5 +1,3 @@
-import { ServerLocation } from "../../api/get-api-url";
-
 export type TracerouteResponse = {
   destination_ip: string;
   traceroute: {
@@ -14,19 +12,19 @@ type TracerouteState =
   | {
       status: "started";
       host: string;
-      location: ServerLocation;
+      location: string;
       responses: TracerouteResponse[];
     }
   | {
       status: "stopped";
       host: string;
-      location: ServerLocation;
+      location: string;
       responses: TracerouteResponse[];
     }
   | { status: "error"; error: Error; host?: string };
 
 type TracerouteAction =
-  | { type: "start"; host: string; location: ServerLocation }
+  | { type: "start"; host: string; location: string }
   | { type: "stop" }
   | { type: "response"; response: TracerouteResponse }
   | { type: "error"; error: Error };

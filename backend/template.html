@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#4766ce" />
+    <meta
+      name="Krystal Network Tools"
+      content="This site is a Krystal Labs invention."
+    />
+    <link rel="apple-touch-icon" href="/logo192.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <script defer="defer" src="{{ .JavaScriptPath }}"></script>
+    <link href="{{ .CSSPath }}" rel="stylesheet" />
+    <meta property="og:title" content="Krystal Network Tools | {{ .EmbedTitle }}" />
+    <meta property="og:description" content="Krystal Network Tools is a online tool designed to assist with remotely running tests and network queries." />
+    <title>Krystal Network Tools</title>
+  </head>
+
+  <body>
+    <div style="display: none;" id="__ktools_regions_blob">{{ .Regions }}</div>
+
+    <noscript>
+      <p>Krystal Network Tools requires JavaScript to be enabled in your browser.</p>
+    </noscript>
+
+    <div id="root"></div>
+  </body>
+</html>

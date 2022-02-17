@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import getApiUrl from "./get-api-url";
+import getApiUrl, { getLocationById, locations } from "./server-locations";
 import { DEFAULT_REQUEST_OPTIONS, RequestOptions } from "./request";
 
 const useQuery = <T>(url: string, options: RequestOptions = {}) => {
@@ -9,7 +9,7 @@ const useQuery = <T>(url: string, options: RequestOptions = {}) => {
 
   useEffect(() => {
     setLoading(true);
-    fetch(getApiUrl(url, options.location), {
+    fetch(getApiUrl(url, options.location ? getLocationById(options.location)! : locations[0]), {
       ...DEFAULT_REQUEST_OPTIONS,
       ...options,
     })

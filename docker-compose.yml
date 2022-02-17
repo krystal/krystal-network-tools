@@ -1,17 +1,12 @@
 version: "3.9"
 
 services:
-  backend:
-    build:
-      context: backend
+  tool:
     privileged: true
+    build: .
     environment:
       DNS_SERVER: "1.1.1.1"
+    volumes:
+      - "./regions.development.yml:/var/app/regions.yml"
     ports:
       - "8080:8080"
-
-  frontend:
-    build:
-      context: frontend
-    ports:
-      - "3000:80"
