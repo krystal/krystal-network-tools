@@ -2,6 +2,8 @@ package api_v1
 
 import (
 	"fmt"
+	godns "github.com/miekg/dns"
+	"go.uber.org/zap"
 	"net"
 	"strconv"
 	"strings"
@@ -20,7 +22,7 @@ var (
 func getPort() uint {
 	currentPortLock.Lock()
 	defer currentPortLock.Unlock()
-	if currentPort > 40000 {
+	if currentPort > 33523 {
 		currentPort = 34457
 	}
 	currentPort++
@@ -59,7 +61,14 @@ type TraceResponse struct {
 	DestinationIP string `json:"destination_ip"`
 }
 
-func traceroute(g *gin.RouterGroup) {
+func traceroute(g *gin.RouterGroup, logger *zap.Logger, cachedDnsServer string) {
+	// Get the local interfaces.
+	ifaceAddrs, err := net.InterfaceAddrs()
+	if err != nil {
+		panic(err)
+	}
+
+	// Add the route.
 	g.GET("/:hostnameOrIp", func(ctx *gin.Context) {
 		// Get the hostname or IP.
 		hostnameOrIp := ctx.Param("hostnameOrIp")
@@ -87,29 +96,101 @@ func traceroute(g *gin.RouterGroup) {
 		}
 
 		// Get the addresses.
-		addrs, err := net.LookupHost(hostnameOrIp)
-		if err != nil {
-			if isJson {
-				ctx.JSON(400, map[string]string{
-					"message": "invalid hostname or IP",
-				})
-			} else {
-				ctx.String(400, "invalid hostname or IP")
+		ipAddr := net.ParseIP(hostnameOrIp)
+		if ipAddr == nil {
+			// Make the DNS connection.
+			dnsServer := cachedDnsServer
+			conn, err := godns.Dial("tcp", dnsServer)
+			if err != nil {
+				logger.Error("failed to connect to dns server", zap.Error(err))
+				ctx.Error(err)
+				return
 			}
-			return
+
+			// Defer killing the connection to stop leaks.
+			defer conn.Close()
+
+			// Create the DNS message.
+			msg := &godns.Msg{}
+			msg.Id = godns.Id()
+			msg.RecursionDesired = true
+
+			// Make the A request.
+			if !strings.HasSuffix(hostnameOrIp, ".") {
+				hostnameOrIp += "."
+			}
+			msg.Question = []godns.Question{{
+				Name:   hostnameOrIp,
+				Qtype:  godns.StringToType["A"],
+				Qclass: godns.StringToClass["IN"],
+			}}
+
+			// Send the DNS message.
+			err = conn.WriteMsg(msg)
+			if err != nil {
+				ctx.Error(&gin.Error{
+					Err:  fmt.Errorf("failed to perform dns lookup: %v", err),
+					Type: gin.ErrorTypePublic,
+				})
+				return
+			}
+
+			// Read the DNS response.
+			msg, err = conn.ReadMsg()
+			if err != nil {
+				ctx.Error(err)
+				return
+			}
+
+			// Handle both cases here.
+			if msg.Answer == nil || len(msg.Answer) == 0 {
+				// Remake the message for an AAAA record.
+				msg = &godns.Msg{}
+				msg.Id = godns.Id()
+				msg.RecursionDesired = true
+				msg.Question = []godns.Question{{
+					Name:   hostnameOrIp,
+					Qtype:  godns.StringToType["AAAA"],
+					Qclass: godns.StringToClass["IN"],
+				}}
+				err = conn.WriteMsg(msg)
+				if err != nil {
+					ctx.Error(&gin.Error{
+						Err:  fmt.Errorf("failed to perform dns lookup: %v", err),
+						Type: gin.ErrorTypePublic,
+					})
+					return
+				}
+				msg, err = conn.ReadMsg()
+				if err != nil {
+					ctx.Error(err)
+					return
+				}
+				if msg.Answer != nil && len(msg.Answer) > 0 {
+					ipAddr = msg.Answer[0].(*godns.AAAA).AAAA
+				}
+			} else {
+				// Get the A record.
+				aRecord := msg.Answer[0].(*godns.A)
+				ipAddr = aRecord.A
+			}
+
+			// In this situation, attempt to parse the host.
+			if ipAddr == nil {
+				if isJson {
+					ctx.JSON(400, map[string]string{
+						"message": "invalid hostname or IP",
+					})
+				} else {
+					ctx.String(400, "invalid hostname or IP")
+				}
+				return
+			}
 		}
-		ipAddr := net.ParseIP(addrs[0])
 
 		// Set the default timeout.
 		if p.Timeout == 0 || p.Timeout > 1000 {
 			p.Timeout = 1000
-		}
-
-		// Get the local interfaces.
-		ifaceAddrs, err := net.InterfaceAddrs()
-		if err != nil {
-			ctx.Error(err)
-			return
 		}
 
 		// Find the relevant local IP.
