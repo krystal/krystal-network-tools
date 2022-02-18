@@ -3,7 +3,6 @@ import { FC, useState } from "react";
 import {
   Box,
   Container,
-  Heading,
   HStack,
   useColorMode,
   useColorModeValue,
