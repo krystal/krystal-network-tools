@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	"io/fs"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -82,11 +83,6 @@ func main() {
 		}
 	})
 
-	// Handle trusted proxies.
-	if err := r.SetTrustedProxies(nil); err != nil {
-		logger.Fatal("Failed to set trusted proxies", zap.Error(err))
-	}
-
 	// Add the rest of the middleware/routes.
 	r.Use(ginzap.Ginzap(logger, time.RFC3339, true))
 	r.Use(ginzap.RecoveryWithZap(logger, true))
@@ -96,10 +92,28 @@ func main() {
 	// Build the listener.
 	httpsHost := os.Getenv("HTTPS_HOST")
 	if httpsHost == "" {
-		if err = r.Run(); err != nil {
+		// Listen for X-Forwarded-For.
+		r.ForwardedByClientIP = true
+
+		// Run on the specified port.
+		port := os.Getenv("PORT")
+		if port == "" {
+			port = "8080"
+		}
+		ln, err := net.Listen("tcp", "127.0.0.1:"+port)
+		if err != nil {
+			logger.Fatal("Failed to listen on port", zap.Error(err))
+		}
+		if err = r.RunListener(ln); err != nil {
 			logger.Fatal("Failed to run the server", zap.Error(err))
 		}
 	} else {
+		// Handle blanking trusted proxies.
+		if err := r.SetTrustedProxies(nil); err != nil {
+			logger.Fatal("Failed to set trusted proxies", zap.Error(err))
+		}
+
+		// Launch with certmagic.
 		if err = certmagic.HTTPS([]string{httpsHost}, r); err != nil {
 			logger.Fatal("Failed to run the server", zap.Error(err))
 		}
