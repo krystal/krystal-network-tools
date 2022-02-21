@@ -5,13 +5,23 @@ import (
 	gowhois "github.com/likexian/whois"
 )
 
-func whois(g group) {
+type whoisLookuper interface {
+	Whois(hostOrIp string) (string, error)
+}
+
+type defaultWhoisLookuper struct{}
+
+func (defaultWhoisLookuper) Whois(hostOrIp string) (string, error) {
+	return gowhois.Whois(hostOrIp)
+}
+
+func whois(g group, whoisLookup whoisLookuper) {
 	g.GET("/:hostOrIp", func(context *gin.Context) {
 		// Get the hostname or IP address.
 		hostOrIp := context.Param("hostOrIp")
 
 		// Do the WHOIS lookup.
-		result, err := gowhois.Whois(hostOrIp)
+		result, err := whoisLookup.Whois(hostOrIp)
 		if err != nil {
 			if context.ContentType() == "application/json" {
 				context.JSON(400, map[string]string{

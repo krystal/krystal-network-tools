@@ -1,10 +1,11 @@
 package api_v1
 
 import (
+	"bytes"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"regexp"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -12,22 +13,55 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var (
-	queryTimeRegex  = regexp.MustCompile(`Query time: \d+ msec`)
-	whenRegex       = regexp.MustCompile(`WHEN: .+ GMT`)
-	lastUpdateRegex = regexp.MustCompile(`Last update of WHOIS database: .+Z`)
-	queryInfoRegex  = regexp.MustCompile("% This query was served by the RIPE " +
-		"Database Query Service version 1.102.2 (.+)")
+const (
+	resultHeader = "RESULT HEADER - DO NOT MANUALLY EDIT THIS LINE"
+	errorHeader  = "ERROR HEADER - DO NOT MANUALLY EDIT THIS LINE"
 )
 
-func Test_whois(t *testing.T) {
-	// Allow the function to insert into the group as it normally would.
-	hn := mockGroupSingleHn(t, "GET", "/:hostOrIp", whois)
-	if hn == nil {
-		return
+func makeWhoisResultFile(t *testing.T, result string, err error) {
+	if err == nil {
+		golden.SetP(t, "whois_result", []byte(resultHeader+"\n"+result))
+	} else {
+		golden.SetP(t, "whois_result", []byte(errorHeader+"\n"+err.Error()))
 	}
+}
 
-	// Run the tests on the handler.
+func readWhoisResultFile(t *testing.T) (string, error) {
+	b := golden.GetP(t, "whois_result")
+	a := bytes.SplitN(b, []byte("\n"), 2)
+	if len(a) == 1 {
+		return "", errors.New("header invalid")
+	}
+	switch string(a[0]) {
+	case resultHeader:
+		return string(a[1]), nil
+	case errorHeader:
+		return "", errors.New(string(a[1]))
+	default:
+		return "", errors.New("header invalid")
+	}
+}
+
+type goldenWhoisWriter struct {
+	t        *testing.T
+	lookuper whoisLookuper
+}
+
+func (g goldenWhoisWriter) Whois(hostOrIp string) (string, error) {
+	r, err := g.lookuper.Whois(hostOrIp)
+	makeWhoisResultFile(g.t, r, err)
+	return r, err
+}
+
+type goldenWhoisLookuper struct {
+	t *testing.T
+}
+
+func (g goldenWhoisLookuper) Whois(hostOrIp string) (string, error) {
+	return readWhoisResultFile(g.t)
+}
+
+func Test_whois(t *testing.T) {
 	tests := []struct {
 		name string
 
@@ -84,16 +118,26 @@ func Test_whois(t *testing.T) {
 			if tt.json {
 				c.Request.Header.Set("Content-Type", "application/json")
 			}
+			hn := mockGroupSingleHn(t, "GET", "/:hostOrIp", func(g group) {
+				if golden.Update() {
+					whois(g, goldenWhoisWriter{
+						t:        t,
+						lookuper: defaultWhoisLookuper{},
+					})
+				} else {
+					whois(g, goldenWhoisLookuper{t})
+				}
+			})
+			if hn == nil {
+				return
+			}
 			hn(c)
 			assert.Equal(t, tt.code, w.Code)
-			v := queryTimeRegex.ReplaceAllString(w.Body.String(), "")
-			v = queryInfoRegex.ReplaceAllString(v, "")
-			v = lastUpdateRegex.ReplaceAllString(v, "")
-			v = whenRegex.ReplaceAllString(v, "")
+			body := w.Body.String()
 			if golden.Update() {
-				golden.Set(t, []byte(v))
+				golden.SetP(t, "result", []byte(body))
 			}
-			assert.Equal(t, string(golden.Get(t)), v)
+			assert.Equal(t, string(golden.GetP(t, "result")), body)
 		})
 	}
 }
