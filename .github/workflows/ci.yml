@@ -20,7 +20,7 @@ jobs:
             ${{ runner.os }}-go-
 
       - name: Run tests
-        run: cd backend && mkdir frontend_blobs && touch frontend_blobs/do_not_remove && go test -race -v ./...
+        run: cd backend && mkdir frontend_blobs && touch frontend_blobs/do_not_remove && GOMAXPROCS=2 go test -race -v ./...
         env:
           VERBOSE: "true"
 
