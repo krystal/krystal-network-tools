@@ -113,6 +113,20 @@ type assetManifestPartial struct {
 	Files map[string]string `json:"files"`
 }
 
+func errorFrontend(r *gin.Engine, logger *zap.Logger, err error, message string) {
+	f := []zap.Field{}
+	if err != nil {
+		f = append(f, zap.Error(err))
+	}
+	logger.Error(message+" - frontend will not be rendered", f...)
+	for k := range routes {
+		r.GET(k, func(c *gin.Context) {
+			c.String(http.StatusInternalServerError,
+				"failed to load frontend - please check console for details")
+		})
+	}
+}
+
 func initFrontend(r *gin.Engine, f fs.FS, logger *zap.Logger) {
 	// Initialize the template.
 	tpl := template.Must(template.New("template").Parse(templateHTMLString))
@@ -120,7 +134,7 @@ func initFrontend(r *gin.Engine, f fs.FS, logger *zap.Logger) {
 	// Look for asset-manifest.json and load it.
 	file, err := f.Open("asset-manifest.json")
 	if err != nil {
-		logger.Error("no asset-manifest.json found - frontend will not be rendered", zap.Error(err))
+		errorFrontend(r, logger, err, "failed to open asset-manifest.json")
 		return
 	}
 	b, err := io.ReadAll(file)
@@ -129,7 +143,7 @@ func initFrontend(r *gin.Engine, f fs.FS, logger *zap.Logger) {
 	}
 	var assetsPartial assetManifestPartial
 	if err := json.Unmarshal(b, &assetsPartial); err != nil {
-		logger.Error("error parsing asset-manifest.json", zap.Error(err))
+		errorFrontend(r, logger, err, "error parsing asset-manifest.json")
 		return
 	}
 
@@ -153,32 +167,38 @@ func initFrontend(r *gin.Engine, f fs.FS, logger *zap.Logger) {
 
 	// Return with an error if the JS entrypoint is not found.
 	if jsEntrypoint == "" {
-		logger.Error("no JS entrypoint found - frontend will not be rendered", zap.String("entrypoint", jsEntrypoint))
+		errorFrontend(r, logger, nil, "no JS entrypoint found")
 		return
 	}
 
 	// Return with an error if the CSS entrypoint is not found.
 	if cssEntrypoint == "" {
-		logger.Error("no CSS entrypoint found - frontend will not be rendered", zap.String("entrypoint", cssEntrypoint))
+		errorFrontend(r, logger, nil, "no CSS entrypoint found")
 		return
 	}
 
 	// Find the regions blob on the filesystem.
 	b, err = os.ReadFile("regions.yml")
 	if err != nil {
-		logger.Error("error reading regions.yml", zap.Error(err))
+		if os.IsNotExist(err) {
+			b = []byte(`- id: local
+  name: Local
+  url: /`)
+		} else {
+			errorFrontend(r, logger, nil, "error reading regions.yml")
+		}
 		return
 	}
 
 	// Attempt to unmarshal the YAML.
 	var regions []region
 	if err := yaml.Unmarshal(b, &regions); err != nil {
-		logger.Error("error parsing regions.yml", zap.Error(err))
+		errorFrontend(r, logger, err, "error parsing regions.yml")
 		return
 	}
 	jBlob, err := json.Marshal(regions)
 	if err != nil {
-		logger.Error("error marshaling regions.yml", zap.Error(err))
+		errorFrontend(r, logger, err, "error marshaling regions.yml")
 		return
 	}
 	jBlobStr := string(jBlob)
