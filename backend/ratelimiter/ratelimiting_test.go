@@ -192,6 +192,8 @@ func TestNewBucket(t *testing.T) {
 		per     time.Duration
 		backoff time.Duration
 	}{
+		// Tests that the buckets can handle a significant number of requests
+		// one after another. Each request should not be ratelimited.
 		{
 			name:    "non-parallel requests",
 			maxUses: 1000,
@@ -199,6 +201,9 @@ func TestNewBucket(t *testing.T) {
 			backoff: time.Second,
 			reqs:    makeGenericRequests(1000, false),
 		},
+
+		// Tests that the buckets can handle many requests coming into the
+		// web server at once. Each request should not be ratelimited.
 		{
 			name:    "parallel requests",
 			maxUses: 1000,
@@ -206,6 +211,10 @@ func TestNewBucket(t *testing.T) {
 			backoff: time.Second,
 			reqs:    makeGenericRequests(1000, true),
 		},
+
+		// Check that ratelimits are hit and returned properly when not in
+		// parallel. This allows us to isolate issues with parallelism and
+		// matching ratelimits.
 		{
 			name:    "non-parallel ratelimit hits",
 			maxUses: 2,
@@ -247,6 +256,10 @@ func TestNewBucket(t *testing.T) {
 				},
 			},
 		},
+
+		// Tests that when requests are run after we are ratelimited,
+		// we return the ratelimit properly. This allows us to differentiate
+		// issues with race from the test above.
 		{
 			name:    "parallel ratelimit hits",
 			maxUses: 2,
@@ -288,6 +301,8 @@ func TestNewBucket(t *testing.T) {
 				},
 			},
 		},
+
+		// Test that after the backoff time, requests are successful again.
 		{
 			name:    "backoff",
 			maxUses: 2,
@@ -326,6 +341,8 @@ func TestNewBucket(t *testing.T) {
 				},
 			},
 		},
+
+		// Test multiple buckets with different backoffs and request speeds.
 		{
 			name:    "multiple buckets",
 			maxUses: 2,
