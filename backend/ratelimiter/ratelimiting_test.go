@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
-	"strings"
+	"regexp"
 	"sync"
 	"testing"
 	"time"
@@ -20,7 +20,7 @@ type jsonValue struct {
 }
 
 type argValue struct {
-	prefix string
+	prefix *regexp.Regexp
 	value  interface{}
 }
 
@@ -104,11 +104,11 @@ type request struct {
 	parallel     bool
 }
 
-func (r request) do(t *testing.T, f func(bucketContext), cb func()) {
+func (r request) do(t *testing.T, f func(bucketContext), wg *sync.WaitGroup) {
 	innerDo := func() {
 		defer func() {
-			if cb != nil {
-				cb()
+			if wg != nil {
+				wg.Done()
 			}
 		}()
 		t.Helper()
@@ -145,10 +145,13 @@ func (r request) do(t *testing.T, f func(bucketContext), cb func()) {
 					if len(x.values) == len(y.values) {
 						for i, v := range y.values {
 							formatter := x.values[i]
-							if formatter.prefix == "" {
+							if formatter.prefix == nil {
 								assert.Equal(t, formatter.value, v)
 							} else {
-								assert.True(t, strings.HasPrefix(fmt.Sprint(v), formatter.prefix))
+								formatted := fmt.Sprint(v)
+								if !formatter.prefix.MatchString(formatted) {
+									t.Errorf("value %s does not match regex prefix", formatted)
+								}
 							}
 						}
 					} else {
@@ -228,7 +231,7 @@ func TestNewBucket(t *testing.T) {
 						format: "You have been ratelimited! Try again in %s.",
 						values: []argValue{
 							{
-								prefix: "999 milliseconds ",
+								prefix: regexp.MustCompile("^99[0-9] milliseconds "),
 							},
 						},
 					},
@@ -269,7 +272,7 @@ func TestNewBucket(t *testing.T) {
 						format: "You have been ratelimited! Try again in %s.",
 						values: []argValue{
 							{
-								prefix: "999 milliseconds ",
+								prefix: regexp.MustCompile("^99[0-9] milliseconds "),
 							},
 						},
 					},
@@ -310,7 +313,7 @@ func TestNewBucket(t *testing.T) {
 						format: "You have been ratelimited! Try again in %s.",
 						values: []argValue{
 							{
-								prefix: "4 milliseconds ",
+								prefix: regexp.MustCompile("^[1-4] milliseconds "),
 							},
 						},
 					},
@@ -353,15 +356,10 @@ func TestNewBucket(t *testing.T) {
 						format: "You have been ratelimited! Try again in %s.",
 						values: []argValue{
 							{
-								prefix: "4 milliseconds ",
+								prefix: regexp.MustCompile("^[1-4] milliseconds "),
 							},
 						},
 					},
-				},
-				{
-					contentType: "application/json",
-					clientIP:    "8.8.8.8",
-					parallel:    false,
 				},
 				{
 					contentType: "application/json",
@@ -380,26 +378,37 @@ func TestNewBucket(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			b, bt := newBucket(zaptest.NewLogger(t), tt.maxUses, tt.per, tt.backoff, true)
-			wg := sync.WaitGroup{}
-			parallelTasks := false
+			b := newBucket(zaptest.NewLogger(t), tt.maxUses, tt.per, tt.backoff)
+			wg := &sync.WaitGroup{}
+			parallelTasksBefore := false
 			for _, v := range tt.reqs {
-				var f func()
 				if v.parallel {
+					// If these tests are parallel, we want to run them at the same time.
+					// This allows for us to test for races and things like that.
+					// We also set parallelTasksBefore to true. This is done so that if we have a
+					// non-parallel task next, we know from it that there are parallel tasks
+					// running and to wait.
 					wg.Add(1)
-					f = wg.Done
-					parallelTasks = true
-				} else if parallelTasks {
-					// Wait for the tasks to be done first.
-					parallelTasks = false
+					parallelTasksBefore = true
+					v.do(t, b, wg)
+					continue
+				}
+
+				if parallelTasksBefore {
+					// If there were parallel tasks before this, we should wait for the parallel
+					// tasks to complete and then say this is not parallel. This prevents a situation
+					// where non-parallel tasks run at the same time as parallel ones.
+					parallelTasksBefore = false
 					wg.Wait()
 				}
-				v.do(t, b, f)
+
+				// Run the request in non-parallel. Note that the lack of a wait group is intentional.
+				// This is because we do not want to remove from the wait group at all.
+				v.do(t, b, nil)
 			}
+
+			// Wait here in case any parallel tasks are still running.
 			wg.Wait()
-			for _, v := range bt.timers {
-				v.Stop()
-			}
 		})
 	}
 }
