@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap"
 )
 
-type bucket struct {
+type ipBucket struct {
 	backoffUntil time.Time
 	reqs         uint64
 }
@@ -28,7 +28,7 @@ type bucketContext interface {
 
 // Creates a new bucket. Is internal to allow for testing.
 func newBucket(log *zap.Logger, maxUses uint64, per, backoff time.Duration) func(bucketContext) {
-	m := map[string]*bucket{}
+	m := map[string]*ipBucket{}
 	mu := sync.Mutex{}
 	return func(c bucketContext) {
 		// Lock the global map whilst we handle this. We will almost always write.
@@ -41,7 +41,7 @@ func newBucket(log *zap.Logger, maxUses uint64, per, backoff time.Duration) func
 		clientIp := c.ClientIP()
 		b, ok := m[clientIp]
 		if !ok {
-			b = &bucket{}
+			b = &ipBucket{}
 			m[clientIp] = b
 		}
 
@@ -84,11 +84,11 @@ func newBucket(log *zap.Logger, maxUses uint64, per, backoff time.Duration) func
 			return
 		}
 
-		// Add 1 to the bucket.
+		// Add 1 to the ipBucket.
 		x := b.reqs
 		b.reqs++
 
-		// Create a function to zero the request count after the per duration on the first request of the bucket.
+		// Create a function to zero the request count after the per duration on the first request of the ipBucket.
 		if x == 0 {
 			time.AfterFunc(per, func() {
 				mu.Lock()

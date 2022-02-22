@@ -56,7 +56,7 @@ type mocker struct {
 }
 
 func (m *mocker) JSON(status int, obj interface{}) {
-	v := reflect.Indirect(reflect.ValueOf(obj))
+	v := reflect.ValueOf(obj)
 	keysReflect := v.MapKeys()
 	keys := make([]string, len(keysReflect))
 	for i, key := range keysReflect {
@@ -104,10 +104,14 @@ type request struct {
 	parallel     bool
 }
 
-func (r request) do(t *testing.T, f func(bucketContext), c chan struct{}) {
+func (r request) do(t *testing.T, f func(bucketContext), cb func()) {
 	innerDo := func() {
+		defer func() {
+			if cb != nil {
+				cb()
+			}
+		}()
 		t.Helper()
-		time.Sleep(r.sleep)
 		m := &mocker{
 			t:           t,
 			clientIP:    r.clientIP,
@@ -153,13 +157,13 @@ func (r request) do(t *testing.T, f func(bucketContext), c chan struct{}) {
 				}
 			}
 		}
-		if c != nil {
-			c <- struct{}{}
-		}
 	}
 	if r.parallel {
-		go innerDo()
+		time.AfterFunc(r.sleep, innerDo)
 	} else {
+		if r.sleep != 0 {
+			time.Sleep(r.sleep)
+		}
 		innerDo()
 	}
 }
@@ -378,19 +382,19 @@ func TestNewBucket(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			b := newBucket(zaptest.NewLogger(t), tt.maxUses, tt.per, tt.backoff)
 			wg := sync.WaitGroup{}
+			parallelTasks := false
 			for _, v := range tt.reqs {
-				var c chan struct{}
+				var f func()
 				if v.parallel {
-					c = make(chan struct{})
 					wg.Add(1)
+					f = wg.Done
+					parallelTasks = true
+				} else if parallelTasks {
+					// Wait for the tasks to be done first.
+					parallelTasks = false
+					wg.Wait()
 				}
-				v.do(t, b, c)
-				if c != nil {
-					go func() {
-						<-c
-						wg.Done()
-					}()
-				}
+				v.do(t, b, f)
 			}
 			wg.Wait()
 		})
