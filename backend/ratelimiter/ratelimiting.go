@@ -26,10 +26,25 @@ type bucketContext interface {
 	Value(key interface{}) interface{}
 }
 
+type bucketTimers struct {
+	sync.Mutex
+	timers []*time.Timer
+}
+
+func (b *bucketTimers) add(t *time.Timer) {
+	b.Lock()
+	b.timers = append(b.timers, t)
+	b.Unlock()
+}
+
 // Creates a new bucket. Is internal to allow for testing.
-func newBucket(log *zap.Logger, maxUses uint64, per, backoff time.Duration) func(bucketContext) {
+func newBucket(log *zap.Logger, maxUses uint64, per, backoff time.Duration, mkBucketTimers bool) (func(bucketContext), *bucketTimers) {
 	m := map[string]*ipBucket{}
 	mu := sync.Mutex{}
+	var bt *bucketTimers
+	if mkBucketTimers {
+		bt = &bucketTimers{}
+	}
 	return func(c bucketContext) {
 		// Lock the global map whilst we handle this. We will almost always write.
 		mu.Lock()
@@ -51,11 +66,14 @@ func newBucket(log *zap.Logger, maxUses uint64, per, backoff time.Duration) func
 			// If we do not have a backoff time set, set it.
 			if backoffUntilZero {
 				b.backoffUntil = time.Now().Add(backoff)
-				time.AfterFunc(backoff, func() {
+				t := time.AfterFunc(backoff, func() {
 					mu.Lock()
 					delete(m, clientIp)
 					mu.Unlock()
 				})
+				if bt != nil {
+					bt.add(t)
+				}
 			}
 
 			// Log a warning since this is potential abuse.
@@ -90,7 +108,7 @@ func newBucket(log *zap.Logger, maxUses uint64, per, backoff time.Duration) func
 
 		// Create a function to zero the request count after the per duration on the first request of the ipBucket.
 		if x == 0 {
-			time.AfterFunc(per, func() {
+			t := time.AfterFunc(per, func() {
 				mu.Lock()
 				b.reqs = 0
 				if b.backoffUntil.IsZero() {
@@ -98,13 +116,16 @@ func newBucket(log *zap.Logger, maxUses uint64, per, backoff time.Duration) func
 				}
 				mu.Unlock()
 			})
+			if bt != nil {
+				bt.add(t)
+			}
 		}
-	}
+	}, bt
 }
 
 // NewBucket is used to create a new ratelimit bucket for users of the site.
 func NewBucket(log *zap.Logger, maxUses uint64, per, backoff time.Duration) gin.HandlerFunc {
-	b := newBucket(log, maxUses, per, backoff)
+	b, _ := newBucket(log, maxUses, per, backoff, false)
 	return func(context *gin.Context) {
 		b(context)
 	}

@@ -380,7 +380,7 @@ func TestNewBucket(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			b := newBucket(zaptest.NewLogger(t), tt.maxUses, tt.per, tt.backoff)
+			b, bt := newBucket(zaptest.NewLogger(t), tt.maxUses, tt.per, tt.backoff, true)
 			wg := sync.WaitGroup{}
 			parallelTasks := false
 			for _, v := range tt.reqs {
@@ -397,6 +397,9 @@ func TestNewBucket(t *testing.T) {
 				v.do(t, b, f)
 			}
 			wg.Wait()
+			for _, v := range bt.timers {
+				v.Stop()
+			}
 		})
 	}
 }
