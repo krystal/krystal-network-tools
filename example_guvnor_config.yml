@@ -1,0 +1,32 @@
+# /etc/guvnor/services/krystal-network-tools.yaml
+
+processes:
+  main:
+    image: ghcr.io/krystal/identity
+    imageTag: latest
+    env:
+      DNS_SERVER: <dns server here>
+    mounts:
+      - host: /run/bird/bird.ctl
+        container: /run/bird/bird.ctl
+      - host: /var/krystal-network-tools/regions.yml
+        container: /var/app/regions.yaml
+    command: ["/var/app/main"]
+    quantity: 1
+    restartMode: standard
+    privileged: true
+    caddy:
+      hostnames:
+        - <dns host here>
+    network:
+      mode: host
+    readyCheck:
+      frequency: 2
+      maximum: 30
+      http:
+        timeout: 5
+        expectedStatus: 200
+        path: /v1/ip
+        headers:
+          - name: X-Forwarded-For
+            value: 1.1.1.1

@@ -107,7 +107,7 @@ type request struct {
 func (r request) do(t *testing.T, f func(bucketContext), wg *sync.WaitGroup) {
 	innerDo := func() {
 		defer func() {
-			if wg != nil {
+			if r.parallel {
 				wg.Done()
 			}
 		}()
@@ -400,28 +400,23 @@ func TestNewBucket(t *testing.T) {
 			parallelTasksBefore := false
 			for _, v := range tt.reqs {
 				if v.parallel {
-					// If these tests are parallel, we want to run them at the same time.
-					// This allows for us to test for races and things like that.
+					// If these tests are parallel, we want to add to the wait group.
 					// We also set parallelTasksBefore to true. This is done so that if we have a
 					// non-parallel task next, we know from it that there are parallel tasks
 					// running and to wait.
 					wg.Add(1)
 					parallelTasksBefore = true
-					v.do(t, b, wg)
-					continue
-				}
-
-				if parallelTasksBefore {
-					// If there were parallel tasks before this, we should wait for the parallel
+				} else if parallelTasksBefore {
+					// If there were parallel tasks before this one (and we established this one is
+					// not parallel since this is an else if), we should wait for the parallel
 					// tasks to complete and then say this is not parallel. This prevents a situation
 					// where non-parallel tasks run at the same time as parallel ones.
 					parallelTasksBefore = false
 					wg.Wait()
 				}
 
-				// Run the request in non-parallel. Note that the lack of a wait group is intentional.
-				// This is because we do not want to remove from the wait group at all.
-				v.do(t, b, nil)
+				// Launch the request.
+				v.do(t, b, wg)
 			}
 
 			// Wait here in case any parallel tasks are still running.

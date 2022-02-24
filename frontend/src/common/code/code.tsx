@@ -1,8 +1,14 @@
 import { Box, BoxProps, useColorModeValue } from "@chakra-ui/react";
 import { FC } from "react";
+import { FaClipboard } from "react-icons/fa";
 
 const Code: FC<BoxProps> = ({ children, ...props }) => {
-  return (
+  const copyToClipboard = () => {
+    const c = children?.toString();
+    if (c) navigator.clipboard.writeText(c);
+  };
+
+  return <>
     <Box
       as="pre"
       display="inline-block"
@@ -19,7 +25,10 @@ const Code: FC<BoxProps> = ({ children, ...props }) => {
     >
       <code>{children}</code>
     </Box>
-  );
+    <a onClick={copyToClipboard}>
+      <FaClipboard></FaClipboard>
+    </a>
+  </>;
 };
 
 export default Code;
