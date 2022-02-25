@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"io/fs"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -14,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	api "github.com/krystal/krystal-network-tools/backend/api_v1"
 	"github.com/krystal/krystal-network-tools/backend/dns"
+	pingttl "github.com/strideynet/go-ping-ttl"
 	"go.uber.org/zap"
 )
 
@@ -83,11 +86,24 @@ func main() {
 		}
 	})
 
+	pinger := pingttl.New()
+
+	go func() {
+		logger.Info("starting pinger")
+		err = pinger.Run(context.Background())
+		if err != nil {
+			logger.Fatal("failed to start pinger", zap.Error(err))
+		}
+	}()
+	logger.Info("started pinger")
+
+	pinger.Logf = log.Printf
+
 	// Add the rest of the middleware/routes.
 	r.Use(ginzap.Ginzap(logger, time.RFC3339, true))
 	r.Use(ginzap.RecoveryWithZap(logger, true))
 	g := r.Group("/v1")
-	api.Init(g, logger, dns.GetCachedDNSServer(logger))
+	api.Init(g, logger, dns.GetCachedDNSServer(logger), pinger)
 
 	// Build the listener.
 	httpsHost := os.Getenv("HTTPS_HOST")
@@ -102,8 +118,13 @@ func main() {
 		}
 		ln, err := net.Listen("tcp", "127.0.0.1:"+port)
 		if err != nil {
-			logger.Fatal("Failed to listen on port", zap.Error(err))
+			logger.Fatal(
+				"failed to listen",
+				zap.Error(err),
+				zap.String("port", port),
+			)
 		}
+		logger.Info("server started", zap.String("port", port))
 		if err = r.RunListener(ln); err != nil {
 			logger.Fatal("Failed to run the server", zap.Error(err))
 		}

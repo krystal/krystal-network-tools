@@ -4,8 +4,10 @@ services:
   tool:
     privileged: true
     build: .
+    network_mode: host
     environment:
       DNS_SERVER: "1.1.1.1"
+      PORT: "8080"
     volumes:
       - "./regions.development.yml:/var/app/regions.yml"
     ports:
