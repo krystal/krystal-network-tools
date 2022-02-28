@@ -131,11 +131,18 @@ func ping(g *gin.RouterGroup, log *zap.Logger, p pinger) {
 
 			// Do the pinging.
 			var u *float64
+			var errorMessage *PingErrorMessage
 			res, err := p.Ping(ctx, addr, 0)
 			if err == nil {
 				x := float64(res.Duration.Microseconds()) / 1000
 				u = &x
 			} else {
+				if errors.Is(err, context.DeadlineExceeded) {
+					errorMessage = &PingErrorMessage{
+						IsTimeout: true,
+						Message:   err.Error(),
+					}
+				}
 				log.Error("failed to ping", zap.Error(err))
 			}
 
@@ -143,6 +150,7 @@ func ping(g *gin.RouterGroup, log *zap.Logger, p pinger) {
 			if isJson {
 				jsonResponses = append(jsonResponses, &PingResponse{
 					Hostname:  hostname,
+					Error:     errorMessage,
 					IPAddress: addr.String(),
 					Latency:   u,
 				})
