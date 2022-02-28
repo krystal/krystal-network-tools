@@ -25,9 +25,9 @@ const Code: FC<BoxProps> = ({ children, ...props }) => {
     >
       <code>{children}</code>
     </Box>
-    <a onClick={copyToClipboard} href="#">
+    <button onClick={copyToClipboard}>
       <FaClipboard></FaClipboard>
-    </a>
+    </button>
   </>;
 };
 
