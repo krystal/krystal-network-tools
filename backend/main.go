@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"embed"
+	"fmt"
 	"io/fs"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -33,6 +33,27 @@ func (i serveFsStaticImpl) Exists(prefix string, path string) bool {
 }
 
 var _ static.ServeFileSystem = serveFsStaticImpl{}
+
+func errorHandler(logger *zap.Logger) func(*gin.Context) {
+	return func(ctx *gin.Context) {
+		ctx.Next()
+		if len(ctx.Errors) != 0 {
+			ferr := ctx.Errors[0]
+			if ferr.Type == gin.ErrorTypePublic {
+				if ctx.ContentType() == "application/json" {
+					ctx.JSON(400, map[string]string{
+						"message": ferr.Error(),
+					})
+				} else {
+					ctx.String(400, ferr.Error())
+				}
+			} else {
+				ctx.String(500, "Internal Server Error")
+				logger.Error("internal server error", zap.Error(ctx.Errors[0]))
+			}
+		}
+	}
+}
 
 func main() {
 	// Sub the frontend blob.
@@ -67,24 +88,7 @@ func main() {
 	})
 
 	// Handle internal server errors.
-	r.Use(func(ctx *gin.Context) {
-		ctx.Next()
-		if len(ctx.Errors) != 0 {
-			ferr := ctx.Errors[0]
-			if ferr.Type == gin.ErrorTypePublic {
-				if ctx.ContentType() == "application/json" {
-					ctx.JSON(400, map[string]string{
-						"message": ferr.Error(),
-					})
-				} else {
-					ctx.String(400, ferr.Error())
-				}
-			} else {
-				ctx.String(500, "Internal Server Error")
-				logger.Error("internal server error", zap.Error(ctx.Errors[0]))
-			}
-		}
-	})
+	r.Use(errorHandler(logger))
 
 	pinger := pingttl.New()
 
@@ -97,7 +101,9 @@ func main() {
 	}()
 	logger.Info("started pinger")
 
-	pinger.Logf = log.Printf
+	pinger.Logf = func(s string, i ...interface{}) {
+		logger.Named("pinger").Info(fmt.Sprintf(s, i...))
+	}
 
 	// Add the rest of the middleware/routes.
 	r.Use(ginzap.Ginzap(logger, time.RFC3339, true))

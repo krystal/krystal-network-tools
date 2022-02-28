@@ -21,7 +21,7 @@ func Init(g *gin.RouterGroup, log *zap.Logger, cachedDnsServer string, pinger *p
 		g.Group("/dns", ratelimiter.NewBucket(log, 20, time.Hour, time.Minute*10)), log,
 		cachedDnsServer,
 	)
-	traceroute(g.Group("/traceroute", pingingBucket), log, cachedDnsServer)
+	traceroute(g.Group("/traceroute", pingingBucket), log, pinger)
 	bgp(g.Group("/bgp", ratelimiter.NewBucket(log, 20, time.Hour, time.Minute*10)), makeBirdSocket)
 	whois(g.Group("/whois", ratelimiter.NewBucket(log, 20, time.Hour, time.Minute*10)), defaultWhoisLookuper{})
 	rdns(g.Group("/rdns", ratelimiter.NewBucket(log, 40, time.Hour, time.Minute*10)))
