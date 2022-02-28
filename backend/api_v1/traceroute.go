@@ -146,6 +146,8 @@ func traceroute(g *gin.RouterGroup, logger *zap.Logger, pinger pinger) {
 						setHopIpInfo(timeExceededErr.Peer)
 						f := float64(timeExceededErr.Duration.Microseconds()) / 1000
 						tries[try] = &f
+					} else if errors.Is(err, context.DeadlineExceeded) {
+						// Ignore this! This try should be null.
 					} else if err != nil {
 						// Something went wrong internally.
 						c.Error(err)

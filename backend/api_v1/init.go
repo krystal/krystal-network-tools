@@ -11,8 +11,9 @@ import (
 
 // Init initializes the API.
 func Init(g *gin.RouterGroup, log *zap.Logger, cachedDnsServer string, pinger *pingttl.Pinger) {
-	// Create the base bucket for a few types of requests.
-	pingingBucket := ratelimiter.NewBucket(log, 75, time.Minute, time.Minute*10)
+	// Create the base bucket for a few types of requests related to pinging. This works out to
+	// 10 requests/second, so not awfully consequential to a server but will likely be fine for us.
+	pingingBucket := ratelimiter.NewBucket(log, 100, time.Second*10, time.Minute*10)
 
 	// Load the routes.
 	userIp(g)
