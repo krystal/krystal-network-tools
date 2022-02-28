@@ -1,35 +1,24 @@
 package api_v1
 
 import (
+	"context"
+	"errors"
 	"fmt"
-	godns "github.com/miekg/dns"
-	"go.uber.org/zap"
 	"net"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/gin-gonic/gin"
-	traceroutego "github.com/jakemakesstuff/traceroute"
+	pingttl "github.com/strideynet/go-ping-ttl"
 )
-
-var (
-	currentPort     uint = 34457
-	currentPortLock      = sync.Mutex{}
-)
-
-func getPort() uint {
-	currentPortLock.Lock()
-	defer currentPortLock.Unlock()
-	if currentPort > 33523 {
-		currentPort = 34457
-	}
-	currentPort++
-	return currentPort
-}
 
 type tracerouteParams struct {
+	// IPv6 defines if the traceroute should be ran as IPv6.
+	IPv6 bool `json:"ipv6`
+
 	// Timeout is used to define how long to wait for a response from the remote host.
 	Timeout uint `form:"timeout"`
 
@@ -61,25 +50,18 @@ type TraceResponse struct {
 	DestinationIP string `json:"destination_ip"`
 }
 
-func traceroute(g *gin.RouterGroup, logger *zap.Logger, cachedDnsServer string) {
-	// Get the local interfaces.
-	ifaceAddrs, err := net.InterfaceAddrs()
-	if err != nil {
-		panic(err)
-	}
-
-	// Add the route.
-	g.GET("/:hostnameOrIp", func(ctx *gin.Context) {
+func traceroute(g *gin.RouterGroup, logger *zap.Logger, pinger pinger) {
+	g.GET("/:hostnameOrIp", func(c *gin.Context) {
 		// Get the hostname or IP.
-		hostnameOrIp := ctx.Param("hostnameOrIp")
+		hostnameOrIp := c.Param("hostnameOrIp")
 
 		// Defines if this is JSON.
-		isJson := ctx.ContentType() == "application/json"
+		isJson := c.ContentType() == "application/json"
 
 		// Parse the traceroute parameters.
 		var p tracerouteParams
-		if err := ctx.BindQuery(&p); err != nil {
-			ctx.String(400, "unable to parse query params: %s", err.Error())
+		if err := c.BindQuery(&p); err != nil {
+			c.String(400, "unable to parse query params: %s", err.Error())
 			return
 		}
 
@@ -96,96 +78,17 @@ func traceroute(g *gin.RouterGroup, logger *zap.Logger, cachedDnsServer string) 
 		}
 
 		// Get the addresses.
-		ipAddr := net.ParseIP(hostnameOrIp)
-		if ipAddr == nil {
-			// Make the DNS connection.
-			dnsServer := cachedDnsServer
-			conn, err := godns.Dial("tcp", dnsServer)
-			if err != nil {
-				logger.Error("failed to connect to dns server", zap.Error(err))
-				ctx.Error(err)
-				return
-			}
-
-			// Defer killing the connection to stop leaks.
-			defer conn.Close()
-
-			// Create the DNS message.
-			msg := &godns.Msg{}
-			msg.Id = godns.Id()
-			msg.RecursionDesired = true
-
-			// Make the A request.
-			if !strings.HasSuffix(hostnameOrIp, ".") {
-				hostnameOrIp += "."
-			}
-			msg.Question = []godns.Question{{
-				Name:   hostnameOrIp,
-				Qtype:  godns.StringToType["A"],
-				Qclass: godns.StringToClass["IN"],
-			}}
-
-			// Send the DNS message.
-			err = conn.WriteMsg(msg)
-			if err != nil {
-				ctx.Error(&gin.Error{
-					Err:  fmt.Errorf("failed to perform dns lookup: %v", err),
-					Type: gin.ErrorTypePublic,
-				})
-				return
-			}
-
-			// Read the DNS response.
-			msg, err = conn.ReadMsg()
-			if err != nil {
-				ctx.Error(err)
-				return
-			}
-
-			// Handle both cases here.
-			if msg.Answer == nil || len(msg.Answer) == 0 {
-				// Remake the message for an AAAA record.
-				msg = &godns.Msg{}
-				msg.Id = godns.Id()
-				msg.RecursionDesired = true
-				msg.Question = []godns.Question{{
-					Name:   hostnameOrIp,
-					Qtype:  godns.StringToType["AAAA"],
-					Qclass: godns.StringToClass["IN"],
-				}}
-				err = conn.WriteMsg(msg)
-				if err != nil {
-					ctx.Error(&gin.Error{
-						Err:  fmt.Errorf("failed to perform dns lookup: %v", err),
-						Type: gin.ErrorTypePublic,
-					})
-					return
-				}
-				msg, err = conn.ReadMsg()
-				if err != nil {
-					ctx.Error(err)
-					return
-				}
-				if msg.Answer != nil && len(msg.Answer) > 0 {
-					ipAddr = msg.Answer[0].(*godns.AAAA).AAAA
-				}
-			} else {
-				// Get the A record.
-				aRecord := msg.Answer[0].(*godns.A)
-				ipAddr = aRecord.A
-			}
-
-			// In this situation, attempt to parse the host.
-			if ipAddr == nil {
-				if isJson {
-					ctx.JSON(400, map[string]string{
-						"message": "invalid hostname or IP",
-					})
-				} else {
-					ctx.String(400, "invalid hostname or IP")
-				}
-				return
-			}
+		lookupProtocol := "ip4"
+		if p.IPv6 {
+			lookupProtocol = "ip6"
+		}
+		addr, err := net.ResolveIPAddr(lookupProtocol, hostnameOrIp)
+		if err != nil {
+			c.Error(&gin.Error{
+				Type: gin.ErrorTypePublic,
+				Err:  errors.New("unable to parse hostname or IP"),
+			})
+			return
 		}
 
 		// Set the default timeout.
@@ -193,153 +96,107 @@ func traceroute(g *gin.RouterGroup, logger *zap.Logger, cachedDnsServer string) 
 			p.Timeout = 1000
 		}
 
-		// Find the relevant local IP.
-		var localIP net.IP
-		is6 := ipAddr.To4() == nil
-		if is6 {
-			// Look for a IPv6 address.
-			for _, ifaceAddr := range ifaceAddrs {
-				if ipnet, ok := ifaceAddr.(*net.IPNet); ok && ipnet.IP.To4() == nil && !ipnet.IP.IsLoopback() {
-					localIP = ipnet.IP
-					break
-				}
-			}
-		} else {
-			// Look for a IPv4 address.
-			for _, ifaceAddr := range ifaceAddrs {
-				if ipnet, ok := ifaceAddr.(*net.IPNet); ok && ipnet.IP.To4() != nil && !ipnet.IP.IsLoopback() {
-					localIP = ipnet.IP
-					break
-				}
-			}
-		}
-
 		// Go through each hop.
 		strResponses := []string{}
 		jsonResponses := []*TraceItem{}
-	hopFor:
 		for _, hop := range hops {
-			breakState := (func() int {
-				// Get all needed replies.
-				pings := [3]*float64{}
+			destinationReached := false
+			// Create the context for this specific hop.
+			ctx, cancel := context.WithTimeout(c, time.Millisecond*time.Duration(p.Timeout))
+			defer cancel()
 
-				if is6 {
-					// Add 1 to the hop. The first hop will without fail always not work.
-					hop++
+			// Set the IP address and RDNS for this hop.
+			var hopIp net.Addr
+			var hopRdns *string
+			setHopIpInfo := func(ip net.Addr) {
+				if hopIp != nil {
+					return
 				}
+				hopIp = ip
+				if hosts, _ := net.LookupAddr(hopIp.String()); hosts != nil && len(hosts) > 0 {
+					hopRdns = &hosts[0]
+				}
+			}
 
-				port := int(getPort())
-				for i := 0; i < 2; i++ {
-					// In this library, error is used solely to signify when the TTL has been
-					// sent before the request is done. We can very safely ignore this error.
-					// We may want to re-evaluate this in future releases of the library, but
-					// since we are likely just going to pin this, it does not make a huge difference.
-					res, _ := traceroutego.Traceroute(&traceroutego.TracerouteOptions{
-						SourcePort:      port,
-						SourceAddr:      localIP,
-						ProbeType:       traceroutego.IcmpProbe,
-						DestinationAddr: ipAddr,
-						DestinationPort: 33434,
-						StartingTTL:     int(hop),
-						MaxTTL:          int(hop),
-						ProbeCount:      3,
-						ProbeTimeout:    time.Duration(p.Timeout) * time.Millisecond,
+			// Defines the array of tries.
+			tries := [3]*float64{}
+
+			// Do our 3 tries.
+			for try := 0; try < 3; try++ {
+				resp, err := pinger.Ping(ctx, addr, int(hop))
+				if err == nil {
+					// Set the value based on the response.
+					setHopIpInfo(addr)
+					f := float64(resp.Duration.Microseconds()) / 1000
+					tries[try] = &f
+					destinationReached = true
+				} else {
+					// Handle the various errors that can be thrown.
+					var destUnreachErr *pingttl.DestinationUnreachableErr
+					var timeExceededErr *pingttl.TimeExceededErr
+					if errors.As(err, &destUnreachErr) {
+						// In this event, it is likely the first hop. Most traceroute systems
+						// tend to just ignore this error.
+						setHopIpInfo(destUnreachErr.Peer)
+						f := float64(destUnreachErr.Duration.Microseconds()) / 1000
+						tries[try] = &f
+					} else if errors.As(err, &timeExceededErr) {
+						// The only likely information we can get from the event is the remote
+						// IP address. We should get this if needed.
+						setHopIpInfo(timeExceededErr.Peer)
+						f := float64(timeExceededErr.Duration.Microseconds()) / 1000
+						tries[try] = &f
+					} else if err != nil {
+						// Something went wrong internally.
+						c.Error(err)
+						return
+					}
+				}
+			}
+
+			// Add the response to the slice.
+			if isJson {
+				// If this is nil, that's okay, that is how we repersent a timeout.
+				if hopIp != nil {
+					jsonResponses = append(jsonResponses, &TraceItem{
+						Pings:     tries,
+						RDNS:      hopRdns,
+						IPAddress: hopIp.String(),
 					})
-
-					// Check the hop is there.
-					if len(res.Hops) != 1 {
-						ctx.Error(fmt.Errorf("probe count wrong"))
-						return 0
-					}
-					hopObj := res.Hops[0]
-
-					// Get the RDNS.
-					var rdns *string
-					var firstNonNull *traceroutego.ProbeResponse
-					for _, v := range hopObj.Responses {
-						if v.Success {
-							// Get the replying IP address.
-							replyingIp := v.Address
-
-							// Get the RDNS.
-							if hosts, _ := net.LookupAddr(replyingIp.String()); hosts != nil && len(hosts) > 0 {
-								rdns = &hosts[0]
-							}
-
-							// Set the value and break.
-							firstNonNull = &v
-							break
-						}
-					}
-
-					// Handle adding all the pings.
-					for i, v := range hopObj.Responses {
-						if v.Success {
-							f := float64(v.Duration.Microseconds()) / 1000
-							pings[i] = &f
-						}
-					}
-
-					// Handle string or JSON formatting.
-					if isJson {
-						// If this is nil, that's okay, that is how we repersent a timeout.
-						if firstNonNull != nil {
-							jsonResponses = append(jsonResponses, &TraceItem{
-								Pings:     pings,
-								RDNS:      rdns,
-								IPAddress: firstNonNull.Address.String(),
-							})
-						}
-					} else {
-						if firstNonNull == nil {
-							strResponses = append(strResponses, strconv.FormatUint(uint64(hop), 10)+"\t*\t*\t*\t*\t")
-						} else {
-							resp := firstNonNull.Address.String()
-							if rdns != nil {
-								resp += " (" + *rdns + ")"
-							}
-							resp += "\t"
-							for _, pi := range pings {
-								if pi == nil {
-									resp += "*\t"
-								} else {
-									resp += fmt.Sprint(*pi) + "\t"
-								}
-							}
-							strResponses = append(strResponses, resp)
-						}
-					}
-
-					// Break the hop for loop if the IP is the same.
-					if firstNonNull != nil {
-						if ipAddr.Equal(firstNonNull.Address) {
-							return 1
-						}
-						break
-					}
 				}
+			} else {
+				if hopIp == nil {
+					strResponses = append(strResponses, strconv.FormatUint(uint64(hop), 10)+"\t*\t*\t*\t*\t")
+				} else {
+					resp := hopIp.String()
+					if hopRdns != nil {
+						resp += " (" + *hopRdns + ")"
+					}
+					resp += "\t"
+					for _, pi := range tries {
+						if pi == nil {
+							resp += "*\t"
+						} else {
+							resp += fmt.Sprint(*pi) + "\t"
+						}
+					}
+					strResponses = append(strResponses, resp)
+				}
+			}
 
-				// Process the next hop.
-				return 2
-			})()
-
-			// Decide how to handle this hop.
-			switch breakState {
-			case 0:
-				return
-			case 1:
-				break hopFor
+			if destinationReached {
+				break
 			}
 		}
 
 		// Return either JSON or string responses.
 		if isJson {
-			ctx.JSON(200, TraceResponse{
+			c.JSON(200, TraceResponse{
 				Traceroute:    jsonResponses,
-				DestinationIP: ipAddr.String(),
+				DestinationIP: addr.String(),
 			})
 		} else {
-			ctx.String(200, strings.Join(strResponses, "\n"))
+			c.String(200, strings.Join(strResponses, "\n")+"\n")
 		}
 	})
 }

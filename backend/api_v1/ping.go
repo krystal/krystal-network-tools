@@ -1,19 +1,26 @@
 package api_v1
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	goping "github.com/go-ping/ping"
+	pingttl "github.com/strideynet/go-ping-ttl"
+	"go.uber.org/zap"
 )
 
 type pingParams struct {
-	Timeout  uint `form:"timeout"`
-	Count    uint `form:"count"`
+	// IPV6 should be set to true if we should try to ping via IPv6.
+	IPV6 bool `form:"ipv6"`
+	// Timeout in milliseconds.
+	Timeout uint `form:"timeout"`
+	// Count is the number of times to run a ping.
+	Count uint `form:"count"`
+	// Interval is the time between consecutive pings in milliseconds.
 	Interval uint `form:"interval"`
 }
 
@@ -37,11 +44,15 @@ type PingResponse struct {
 	// Hostname is used to define the hostname. If it is nil, it means the rDNS lookup is not available.
 	Hostname *string `json:"hostname"`
 
-	// Latency is used to define the latency.
+	// Latency is the time the round-trip in milliseconds.
 	Latency *float64 `json:"latency,omitempty"`
 }
 
-func ping(g *gin.RouterGroup) {
+type pinger interface {
+	Ping(context.Context, *net.IPAddr, int) (*pingttl.PingResult, error)
+}
+
+func ping(g *gin.RouterGroup, log *zap.Logger, p pinger) {
 	g.GET("/:hostnameOrIp", func(ctx *gin.Context) {
 		// Get the hostname or IP.
 		hostnameOrIp := ctx.Param("hostnameOrIp")
@@ -50,8 +61,8 @@ func ping(g *gin.RouterGroup) {
 		isJson := ctx.ContentType() == "application/json"
 
 		// Bind the ping params.
-		var p pingParams
-		if err := ctx.BindQuery(&p); err != nil {
+		var params pingParams
+		if err := ctx.BindQuery(&params); err != nil {
 			if isJson {
 				ctx.JSON(400, map[string]string{
 					"message": err.Error(),
@@ -63,31 +74,30 @@ func ping(g *gin.RouterGroup) {
 		}
 
 		// Enforce the maximum count.
-		if p.Count > 0 {
-			if p.Count > 10 {
-				p.Count = 10
+		if params.Count > 0 {
+			if params.Count > 10 {
+				params.Count = 10
 			}
 		} else {
-			p.Count = 1
+			params.Count = 1
 		}
 
-		// Attempt to make the initial pinger to get the IP address.
-		pinger, err := goping.NewPinger(hostnameOrIp)
+		lookupProtocol := "ip4"
+		if params.IPV6 {
+			lookupProtocol = "ip6"
+		}
+		addr, err := net.ResolveIPAddr(lookupProtocol, hostnameOrIp)
 		if err != nil {
-			if isJson {
-				ctx.JSON(400, map[string]string{
-					"message": err.Error(),
-				})
-			} else {
-				ctx.String(400, "unable to resolve %s: %s", hostnameOrIp, err.Error())
-			}
+			ctx.Error(&gin.Error{
+				Err:  errors.New("failed to resolve the ip address"),
+				Type: gin.ErrorTypePublic,
+			})
+			log.Error("ip resolve error", zap.Error(err))
 			return
 		}
-		addr := pinger.IPAddr()
 
 		// Attempt a rdns lookup.
 		hostnameOrIp = addr.String()
-		ip := pinger.IPAddr().String()
 		var hostname *string
 		if hosts, _ := net.LookupAddr(hostnameOrIp); hosts != nil && len(hosts) > 0 {
 			hostnameOrIp += " [" + hosts[0] + "]"
@@ -99,121 +109,51 @@ func ping(g *gin.RouterGroup) {
 		jsonResponses := []*PingResponse{}
 
 		// Make sure the interval is less than or equal to 1 second.
-		if p.Interval > 1000 {
-			p.Interval = 1000
+		if params.Interval > 1000 {
+			params.Interval = 1000
 		}
 
-		// Run each ping within its own context to make sure that dropped packets are logged in order.
-		for i := uint(0); i < p.Count; i++ {
-			// If i isn't 0, sleep for the specified interval and make a new pinger with the address.
+		if params.Timeout == 0 {
+			params.Timeout = 5000
+		}
+
+		for i := uint(0); i < params.Count; i++ {
+			// If i isn't 0, sleep for the specified interval.
 			if i != 0 {
 				// Sleep for the specified interval.
-				time.Sleep(time.Duration(p.Interval) * time.Millisecond)
-
-				// Make the new pinger.
-				pinger, err = goping.NewPinger(addr.String())
-				if err != nil {
-					if isJson {
-						ctx.JSON(400, map[string]string{
-							"message": err.Error(),
-						})
-					} else {
-						ctx.String(400, "unable to resolve %s: %s", hostnameOrIp, err.Error())
-					}
-					return
-				}
+				time.Sleep(time.Duration(params.Interval) * time.Millisecond)
 			}
 
-			// This is a special hack because the pinger will wait a second before starting if we do not set this.
-			pinger.Interval = time.Duration(1)
+			ctx, cancel := context.WithTimeout(
+				ctx, time.Duration(params.Timeout)*time.Millisecond,
+			)
+			defer cancel()
 
-			// Set the timeout duration. Note we do not use the go-ping timeout function. This is because
-			// it will block for the timeout duration.
-			d := time.Second
-			if p.Timeout > 0 {
-				if p.Timeout > 1000 {
-					p.Timeout = 1000
-				}
-				d = time.Duration(p.Timeout) * time.Millisecond
-			}
-
-			// Set the ping count.
-			pinger.Count = 1
-			if p.Count > 0 {
-				if p.Count > 10 {
-					p.Count = 10
-				}
-				pinger.Count = int(p.Count)
-			}
-
-			// Make sure that we block until the first packet is received, or we time out.
-			var singleSend uintptr
-			errChan := make(chan error, 1)
-			flushChan := func(err error) {
-				if atomic.SwapUintptr(&singleSend, 1) == 1 {
-					return
-				}
-				errChan <- err
-				close(errChan)
-			}
-			t := time.AfterFunc(d, func() {
-				pinger.Stop()
-				flushChan(nil)
-			})
-			go func() {
-				// Call the run function.
-				innerErr := pinger.Run()
-
-				// Stop the timer if it hasn't gone off.
-				t.Stop()
-
-				// Flush the channel.
-				flushChan(innerErr)
-			}()
-
-			// Wait for the channel.
-			if err = <-errChan; err != nil {
-				if isJson {
-					ctx.JSON(400, map[string]string{
-						"message": err.Error(),
-					})
-				} else {
-					ctx.String(400, "unable to ping %s: %s", hostnameOrIp, err.Error())
-				}
-				return
-			}
-
-			// Log timeouts.
-			s := pinger.Statistics()
-			if len(s.Rtts) == 0 {
-				if isJson {
-					jsonResponses = append(jsonResponses, &PingResponse{
-						Error: &PingErrorMessage{
-							IsTimeout: true,
-							Message:   "response timeout",
-						},
-						IPAddress: ip,
-						Hostname:  hostname,
-					})
-				} else {
-					strResponses = append(strResponses,
-						fmt.Sprintf("unable to ping %s: response timeout", hostnameOrIp))
-				}
-				continue
+			// Do the pinging.
+			var u *float64
+			res, err := p.Ping(ctx, addr, 0)
+			if err == nil {
+				x := float64(res.Duration.Microseconds()) / 1000
+				u = &x
+			} else {
+				log.Error("failed to ping", zap.Error(err))
 			}
 
 			// Log a successful ping.
 			if isJson {
-				u := float64(s.Rtts[0].Microseconds()) / 1000
 				jsonResponses = append(jsonResponses, &PingResponse{
 					Hostname:  hostname,
-					IPAddress: ip,
-					Latency:   &u,
+					IPAddress: addr.String(),
+					Latency:   u,
 				})
 			} else {
-				strResponses = append(strResponses,
-					fmt.Sprintf("%d bytes from %s (time=%dms)", pinger.Size, hostnameOrIp,
-						s.Rtts[0].Milliseconds()))
+				if u == nil {
+					strResponses = append(strResponses,
+						fmt.Sprintf("%s (ping failed)", hostnameOrIp))
+				} else {
+					strResponses = append(strResponses,
+						fmt.Sprintf("%s (time=%.3fms)", hostnameOrIp, *u))
+				}
 			}
 		}
 
@@ -221,7 +161,7 @@ func ping(g *gin.RouterGroup) {
 		if isJson {
 			ctx.JSON(200, jsonResponses)
 		} else {
-			ctx.String(200, strings.Join(strResponses, "\n"))
+			ctx.String(200, strings.Join(strResponses, "\n")+"\n")
 		}
 	})
 }
