@@ -32,7 +32,7 @@ const Whois: FC = () => {
 
       {result !== null && (
         <Card>
-          <Code>
+          <Code copyText={result.result}>
             {result.result.split("\n").map((line, index) => {
               const skip = line.includes(">>>") || line.includes("--");
               if (line.match(/^(?![%#])[a-zA-Z0-9\s\-_/]{1,40}:/) && !skip) {

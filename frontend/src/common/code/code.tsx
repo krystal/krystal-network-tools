@@ -1,58 +1,78 @@
 import {
   Box,
   BoxProps,
-  useColorModeValue,
-  Button,
-  HStack,
   useToast,
+  IconButton,
+  DarkMode,
+  HStack,
 } from "@chakra-ui/react";
 import { FC } from "react";
 import { FaClipboard } from "react-icons/fa";
 
-const Code: FC<BoxProps> = ({ children, ...props }) => {
+type CodeProps = {
+  copyText?: string;
+};
+
+const Code: FC<CodeProps & BoxProps> = ({
+  children,
+  copyText = "",
+  ...props
+}) => {
   const toast = useToast();
 
+  const childText = typeof children === "string" ? children : "";
+  const textToCopy = copyText || childText;
+
+  const showActions = !!textToCopy;
+
   const copyToClipboard = () => {
-    const content = children?.toString();
-    if (content) {
-      navigator.clipboard.writeText(content);
-      toast({
-        status: "success",
-        title: "Copied to your clipboard succesfully",
-      });
-    }
+    navigator.clipboard.writeText(textToCopy);
+    toast({
+      status: "success",
+      title: "Copied to your clipboard succesfully",
+    });
   };
 
   return (
-    <Box>
-      <HStack
-        p={2}
-        border="1px solid"
-        borderColor={useColorModeValue("gray.200", "gray.800")}
-        bg={useColorModeValue("white", "gray.700")}
-        borderTopRadius="md"
-        justify="flex-end"
-      >
-        <Button size="xs" onClick={copyToClipboard} leftIcon={<FaClipboard />}>
-          Copy to clipboard
-        </Button>
-      </HStack>
-
+    <Box display="inline-flex">
       <Box
         as="pre"
-        display="block"
+        display="inline-block"
         overflowX="auto"
         bg="gray.900"
         color="gray.50"
         p={4}
+        py={2}
+        pr={showActions ? 2 : 4}
         fontSize="xs"
         fontFamily="monospace"
-        borderBottomRadius="md"
+        borderLeftRadius="md"
+        borderRightRadius={showActions ? 0 : "md"}
         maxW="100%"
         {...props}
       >
         <code>{children}</code>
       </Box>
+
+      {showActions && (
+        <HStack
+          bg="gray.900"
+          px={2}
+          pt={2}
+          borderRightRadius="md"
+          align="flex-start"
+        >
+          <DarkMode>
+            <IconButton
+              size="xs"
+              fontFamily="sans-serif"
+              onClick={copyToClipboard}
+              icon={<FaClipboard />}
+              aria-label="copy"
+            />
+          </DarkMode>
+        </HStack>
+      )}
     </Box>
   );
 };
