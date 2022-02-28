@@ -81,10 +81,17 @@ jobs:
         run: curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash
       - name: Build binaries
         run: ./build_standalone_binaries.sh
-      - name: Build the Docker image
-        run: docker build -t ghcr.io/krystal/krystal-network-tools .
-      - name: Push the Docker image
-        run: docker push ghcr.io/krystal/krystal-network-tools
+      - name: Get the version
+        id: get_version
+        run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
+      - name: Build and push
+        uses: docker/build-push-action@v2
+        with:
+          push: true
+          context: .
+          tags: |
+            ghcr.io/krystal/krystal-network-tools:latest
+            ghcr.io/krystal/krystal-network-tools:${{ steps.get_version.outputs.VERSION }}
       - name: Create a release
         uses: marvinpinto/action-automatic-releases@latest
         with:
