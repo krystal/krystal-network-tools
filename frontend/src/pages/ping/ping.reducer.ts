@@ -1,4 +1,8 @@
-export type PingResponse = { latency: number }[];
+export type PingResponse = {
+  latency: number;
+  ip_address: string;
+  hostname: string | null;
+}[];
 
 type PingState =
   | { status: "initial" }

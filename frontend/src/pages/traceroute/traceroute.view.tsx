@@ -7,6 +7,7 @@ import {
   Heading,
   HStack,
   Stack,
+  Text,
   Spinner,
 } from "@chakra-ui/react";
 
@@ -100,7 +101,12 @@ const Traceroute: FC = () => {
                     <Stack>
                       {traceroute[0] ? (
                         <Code>
-                          {traceroute[0].rdns || traceroute[0].ip_address}
+                          {traceroute[0].ip_address}
+                          {traceroute[0].rdns && (
+                            <Text as="span" opacity="0.5">
+                              {` (${traceroute[0].rdns})`}
+                            </Text>
+                          )}
                         </Code>
                       ) : (
                         <Code>*</Code>

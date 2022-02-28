@@ -34,7 +34,7 @@ const Code: FC<CodeProps & BoxProps> = ({
   };
 
   return (
-    <Box display="inline-flex">
+    <Box display="inline-flex" maxW="100%">
       <Box
         as="pre"
         display="inline-block"
@@ -49,6 +49,7 @@ const Code: FC<CodeProps & BoxProps> = ({
         borderLeftRadius="md"
         borderRightRadius={showActions ? 0 : "md"}
         maxW="100%"
+        flex="1 1 100%"
         {...props}
       >
         <code>{children}</code>
@@ -61,6 +62,7 @@ const Code: FC<CodeProps & BoxProps> = ({
           pt={2}
           borderRightRadius="md"
           align="flex-start"
+          flex="0 0 auto"
         >
           <DarkMode>
             <IconButton
@@ -69,6 +71,7 @@ const Code: FC<CodeProps & BoxProps> = ({
               onClick={copyToClipboard}
               icon={<FaClipboard />}
               aria-label="copy"
+              h={4}
             />
           </DarkMode>
         </HStack>

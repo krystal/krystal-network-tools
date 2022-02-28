@@ -3,13 +3,14 @@ import { FC, useEffect, useReducer } from "react";
 import {
   Alert,
   AlertIcon,
-  Badge,
+  Box,
   Button,
   Heading,
   HStack,
   Stack,
   Tag,
   Spinner,
+  Text,
 } from "@chakra-ui/react";
 
 import endpoint from "../../api/endpoint";
@@ -19,6 +20,7 @@ import pingReducer, { PingResponse } from "./ping.reducer";
 import { pingLatencyColor } from "./ping.helpers";
 import { useAverageLatency } from "./ping.hooks";
 import PingForm from "./ping-form";
+import Code from "../../common/code/code";
 
 const Ping: FC = () => {
   const [state, dispatch] = useReducer(pingReducer, { status: "initial" });
@@ -72,7 +74,12 @@ const Ping: FC = () => {
             <HStack justify="space-between">
               <HStack>
                 {state.status === "started" && <Spinner size="sm" />}
-                <Tag colorScheme={pingLatencyColor(avg)}>{avg}ms</Tag>
+                {(state.status === "started" || state.status === "stopped") &&
+                  state.pings.length && (
+                    <Tag colorScheme={pingLatencyColor(avg)}>
+                      {avg ? `${avg}ms` : "error"}
+                    </Tag>
+                  )}
               </HStack>
               <Button
                 size="sm"
@@ -94,14 +101,25 @@ const Ping: FC = () => {
             {state.status !== "error" && (
               <Stack>
                 {state.pings.map((ping, i) => (
-                  <HStack key={i} justifyContent="space-between">
-                    <HStack>
-                      <Badge colorScheme="brand">ping</Badge>
-                      <Heading size="sm">{state.host}</Heading>
-                    </HStack>
+                  <HStack key={i} justifyContent="space-between" maxW="100%">
+                    <Box flexShrink={1} minW={0}>
+                      <Code>
+                        {ping[0].ip_address}
+                        {ping[0].hostname && (
+                          <Text as="span" opacity="0.5">
+                            {` (${ping[0].hostname})`}
+                          </Text>
+                        )}
+                      </Code>
+                    </Box>
 
-                    <Tag colorScheme={pingLatencyColor(ping[0].latency)}>
-                      {ping[0].latency}ms
+                    <Tag
+                      flex="0 0 auto"
+                      colorScheme={pingLatencyColor(ping[0].latency)}
+                    >
+                      {ping[0].latency === null || isNaN(ping[0].latency)
+                        ? "error"
+                        : `${ping[0].latency}ms`}
                     </Tag>
                   </HStack>
                 ))}

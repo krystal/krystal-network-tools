@@ -4,6 +4,10 @@ type Ping = { latency: number }[];
 
 export const useAverageLatency = (pings: Ping[]) => {
   return useMemo(() => {
+    const pingCount = pings.filter((val) => !isNaN(val[0].latency)).length;
+
+    if (pingCount < 1) return null;
+
     return pings.length
       ? Number(
           (
@@ -13,6 +17,6 @@ export const useAverageLatency = (pings: Ping[]) => {
             }, 0) / pings.filter((val) => !isNaN(val[0].latency)).length
           ).toFixed(3)
         )
-      : 0;
+      : null;
   }, [pings]);
 };
