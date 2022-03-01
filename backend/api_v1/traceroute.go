@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"go.uber.org/zap"
 	"net"
 	"strconv"
 	"strings"
@@ -12,11 +11,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 	pingttl "github.com/strideynet/go-ping-ttl"
+	"go.uber.org/zap"
 )
 
 type tracerouteParams struct {
 	// IPv6 defines if the traceroute should be ran as IPv6.
-	IPv6 bool `json:"ipv6`
+	IPv6 bool `json:"ipv6"`
 
 	// Timeout is used to define how long to wait for a response from the remote host.
 	Timeout uint `form:"timeout"`
