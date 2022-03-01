@@ -9,15 +9,14 @@ import (
 	"strings"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/gin-gonic/gin"
 	pingttl "github.com/strideynet/go-ping-ttl"
+	"go.uber.org/zap"
 )
 
 type tracerouteParams struct {
 	// IPv6 defines if the traceroute should be ran as IPv6.
-	IPv6 bool `json:"ipv6`
+	IPv6 bool `json:"ipv6"`
 
 	// Timeout is used to define how long to wait for a response from the remote host.
 	Timeout uint `form:"timeout"`
@@ -92,18 +91,16 @@ func traceroute(g *gin.RouterGroup, logger *zap.Logger, pinger pinger) {
 		}
 
 		// Set the default timeout.
-		if p.Timeout == 0 || p.Timeout > 1000 {
-			p.Timeout = 1000
+		if p.Timeout == 0 || p.Timeout > 10000 {
+			p.Timeout = 10000
 		}
 
 		// Go through each hop.
 		strResponses := []string{}
 		jsonResponses := []*TraceItem{}
 		for _, hop := range hops {
+			// Defines if the destination was reached.
 			destinationReached := false
-			// Create the context for this specific hop.
-			ctx, cancel := context.WithTimeout(c, time.Millisecond*time.Duration(p.Timeout))
-			defer cancel()
 
 			// Set the IP address and RDNS for this hop.
 			var hopIp net.Addr
@@ -123,7 +120,9 @@ func traceroute(g *gin.RouterGroup, logger *zap.Logger, pinger pinger) {
 
 			// Do our 3 tries.
 			for try := 0; try < 3; try++ {
+				ctx, cancel := context.WithTimeout(context.Background(), time.Duration(p.Timeout)*time.Millisecond)
 				resp, err := pinger.Ping(ctx, addr, int(hop))
+				cancel()
 				if err == nil {
 					// Set the value based on the response.
 					setHopIpInfo(addr)
