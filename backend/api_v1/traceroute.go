@@ -7,11 +7,13 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	pingttl "github.com/strideynet/go-ping-ttl"
-	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 type tracerouteParams struct {
@@ -49,7 +51,7 @@ type TraceResponse struct {
 	DestinationIP string `json:"destination_ip"`
 }
 
-func traceroute(g *gin.RouterGroup, logger *zap.Logger, pinger pinger) {
+func traceroute(g *gin.RouterGroup, pinger pinger) {
 	g.GET("/:hostnameOrIp", func(c *gin.Context) {
 		// Get the hostname or IP.
 		hostnameOrIp := c.Param("hostnameOrIp")
@@ -91,8 +93,8 @@ func traceroute(g *gin.RouterGroup, logger *zap.Logger, pinger pinger) {
 		}
 
 		// Set the default timeout.
-		if p.Timeout == 0 || p.Timeout > 10000 {
-			p.Timeout = 10000
+		if p.Timeout == 0 || p.Timeout > 5000 {
+			p.Timeout = 5000
 		}
 
 		// Go through each hop.
@@ -100,12 +102,15 @@ func traceroute(g *gin.RouterGroup, logger *zap.Logger, pinger pinger) {
 		jsonResponses := []*TraceItem{}
 		for _, hop := range hops {
 			// Defines if the destination was reached.
-			destinationReached := false
+			var destinationReached uintptr
 
 			// Set the IP address and RDNS for this hop.
 			var hopIp net.Addr
 			var hopRdns *string
+			hopIpLock := sync.Mutex{}
 			setHopIpInfo := func(ip net.Addr) {
+				hopIpLock.Lock()
+				defer hopIpLock.Unlock()
 				if hopIp != nil {
 					return
 				}
@@ -119,40 +124,46 @@ func traceroute(g *gin.RouterGroup, logger *zap.Logger, pinger pinger) {
 			tries := [3]*float64{}
 
 			// Do our 3 tries.
+			eg := errgroup.Group{}
 			for try := 0; try < 3; try++ {
-				ctx, cancel := context.WithTimeout(context.Background(), time.Duration(p.Timeout)*time.Millisecond)
-				resp, err := pinger.Ping(ctx, addr, int(hop))
-				cancel()
-				if err == nil {
-					// Set the value based on the response.
-					setHopIpInfo(addr)
-					f := float64(resp.Duration.Microseconds()) / 1000
-					tries[try] = &f
-					destinationReached = true
-				} else {
-					// Handle the various errors that can be thrown.
-					var destUnreachErr *pingttl.DestinationUnreachableErr
-					var timeExceededErr *pingttl.TimeExceededErr
-					if errors.As(err, &destUnreachErr) {
-						// In this event, it is likely the first hop. Most traceroute systems
-						// tend to just ignore this error.
-						setHopIpInfo(destUnreachErr.Peer)
-						f := float64(destUnreachErr.Duration.Microseconds()) / 1000
-						tries[try] = &f
-					} else if errors.As(err, &timeExceededErr) {
-						// The only likely information we can get from the event is the remote
-						// IP address. We should get this if needed.
-						setHopIpInfo(timeExceededErr.Peer)
-						f := float64(timeExceededErr.Duration.Microseconds()) / 1000
-						tries[try] = &f
-					} else if errors.Is(err, context.DeadlineExceeded) {
-						// Ignore this! This try should be null.
-					} else if err != nil {
-						// Something went wrong internally.
-						c.Error(err)
-						return
+				tryPtr := &tries[try]
+				eg.Go(func() error {
+					ctx, cancel := context.WithTimeout(c, time.Duration(p.Timeout)*time.Millisecond)
+					resp, err := pinger.Ping(ctx, addr, int(hop))
+					cancel()
+					if err == nil {
+						// Set the value based on the response.
+						setHopIpInfo(addr)
+						f := float64(resp.Duration.Microseconds()) / 1000
+						*tryPtr = &f
+						atomic.StoreUintptr(&destinationReached, 1)
+					} else {
+						// Handle the various errors that can be thrown.
+						var destUnreachErr *pingttl.DestinationUnreachableErr
+						var timeExceededErr *pingttl.TimeExceededErr
+						if errors.As(err, &destUnreachErr) {
+							// In this event, it is likely the first hop. Most traceroute systems
+							// tend to just ignore this error.
+							setHopIpInfo(destUnreachErr.Peer)
+							f := float64(destUnreachErr.Duration.Microseconds()) / 1000
+							*tryPtr = &f
+						} else if errors.As(err, &timeExceededErr) {
+							// The only likely information we can get from the event is the remote
+							// IP address. We should get this if needed.
+							setHopIpInfo(timeExceededErr.Peer)
+							f := float64(timeExceededErr.Duration.Microseconds()) / 1000
+							*tryPtr = &f
+						} else if !errors.Is(err, context.DeadlineExceeded) {
+							// Something went wrong internally.
+							return err
+						}
 					}
-				}
+					return nil
+				})
+			}
+			if err = eg.Wait(); err != nil {
+				c.Error(err)
+				return
 			}
 
 			// Add the response to the slice.
@@ -185,7 +196,8 @@ func traceroute(g *gin.RouterGroup, logger *zap.Logger, pinger pinger) {
 				}
 			}
 
-			if destinationReached {
+			// Do not carry on if the destination is reached.
+			if atomic.LoadUintptr(&destinationReached) == 1 {
 				break
 			}
 		}
