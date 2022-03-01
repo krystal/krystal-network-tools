@@ -1,16 +1,15 @@
 import {
   Box,
   BoxProps,
-  useToast,
   IconButton,
   DarkMode,
   Icon,
   HStack,
-  useColorModeValue,
   Tooltip,
 } from "@chakra-ui/react";
 import { FC } from "react";
 import { FaClipboard } from "react-icons/fa";
+import { useClipboard } from "../../hooks/use-clipboard";
 
 type CodeProps = {
   copyText?: string;
@@ -21,20 +20,12 @@ const Code: FC<CodeProps & BoxProps> = ({
   copyText = "",
   ...props
 }) => {
-  const toast = useToast();
-
   const childText = typeof children === "string" ? children : "";
   const textToCopy = copyText || childText;
 
   const showActions = !!textToCopy;
 
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(textToCopy);
-    toast({
-      status: "success",
-      title: "Copied to your clipboard succesfully",
-    });
-  };
+  const copyToClipboard = useClipboard(textToCopy);
 
   return (
     <Box display="inline-flex" maxW="100%">

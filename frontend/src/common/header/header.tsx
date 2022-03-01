@@ -12,9 +12,11 @@ import {
   Grid,
   GridItem,
   Tooltip,
+  TagRightIcon,
+  IconButton,
 } from "@chakra-ui/react";
 
-import { FaBars } from "react-icons/fa";
+import { FaBars, FaClipboard } from "react-icons/fa";
 import { BiNetworkChart } from "react-icons/bi";
 import { BsSunFill, BsMoonStarsFill } from "react-icons/bs";
 
@@ -23,11 +25,14 @@ import LogoIcon from "../icons/logo-icon";
 import { Link } from "react-router-dom";
 import HeaderDrawer from "./header-drawer";
 import TooltipIconButton from "../tooltip-icon-button/tooltip-icon-button";
+import { useClipboard } from "../../hooks/use-clipboard";
 
 const Header: FC = () => {
   const { data } = useQuery<{ ip: string }>("/ip");
   const { toggleColorMode } = useColorMode();
   const [menuIsOpen, setMenuIsOpen] = useState(false);
+
+  const copyIp = useClipboard(data?.ip || "");
 
   return (
     <Box
@@ -54,8 +59,15 @@ const Header: FC = () => {
               </HStack>
 
               {data?.ip && (
-                <Tooltip label="Your current IP address">
-                  <Tag variant="subtle" colorScheme="brand" size="sm">
+                <Tooltip label="Click to copy your current IP address">
+                  <Tag
+                    variant="subtle"
+                    colorScheme="brand"
+                    size="sm"
+                    cursor="pointer"
+                    userSelect="none"
+                    onClick={copyIp}
+                  >
                     <TagLeftIcon boxSize="12px" as={BiNetworkChart} />
                     <TagLabel
                       maxWidth={{
