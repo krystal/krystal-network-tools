@@ -14,6 +14,7 @@ import "./app.css";
 import appTheme from "./app-theme";
 import Header from "../common/header/header";
 import Navigation from "../common/navigation/navigation";
+import Footer from "../common/footer/footer";
 
 const App: FC = () => {
   const location = useLocation();
@@ -43,6 +44,8 @@ const App: FC = () => {
             </GridItem>
           </Grid>
         </Container>
+
+        <Footer />
       </ChakraProvider>
     </Box>
   );
