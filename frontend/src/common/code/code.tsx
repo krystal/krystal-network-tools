@@ -4,7 +4,10 @@ import {
   useToast,
   IconButton,
   DarkMode,
+  Icon,
   HStack,
+  useColorModeValue,
+  Tooltip,
 } from "@chakra-ui/react";
 import { FC } from "react";
 import { FaClipboard } from "react-icons/fa";
@@ -58,21 +61,22 @@ const Code: FC<CodeProps & BoxProps> = ({
       {showActions && (
         <HStack
           bg="gray.900"
-          px={2}
-          pt={2}
+          p={2}
           borderRightRadius="md"
           align="flex-start"
           flex="0 0 auto"
         >
           <DarkMode>
-            <IconButton
-              size="xs"
-              fontFamily="sans-serif"
-              onClick={copyToClipboard}
-              icon={<FaClipboard />}
-              aria-label="copy"
-              h={4}
-            />
+            <Tooltip label="Copy to clipboard">
+              <IconButton
+                size="xs"
+                fontFamily="sans-serif"
+                onClick={copyToClipboard}
+                icon={<Icon h={3} w={3} color="white" as={FaClipboard} />}
+                aria-label="copy"
+                h={5}
+              />
+            </Tooltip>
           </DarkMode>
         </HStack>
       )}
