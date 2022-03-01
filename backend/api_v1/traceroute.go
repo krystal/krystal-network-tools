@@ -128,7 +128,7 @@ func traceroute(g *gin.RouterGroup, pinger pinger) {
 			for try := 0; try < 3; try++ {
 				tryPtr := &tries[try]
 				eg.Go(func() error {
-					ctx, cancel := context.WithTimeout(context.Background(), time.Duration(p.Timeout)*time.Millisecond)
+					ctx, cancel := context.WithTimeout(c, time.Duration(p.Timeout)*time.Millisecond)
 					resp, err := pinger.Ping(ctx, addr, int(hop))
 					cancel()
 					if err == nil {
