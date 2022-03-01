@@ -12,11 +12,9 @@ import {
   Grid,
   GridItem,
   Tooltip,
-  TagRightIcon,
-  IconButton,
 } from "@chakra-ui/react";
 
-import { FaBars, FaClipboard } from "react-icons/fa";
+import { FaBars } from "react-icons/fa";
 import { BiNetworkChart } from "react-icons/bi";
 import { BsSunFill, BsMoonStarsFill } from "react-icons/bs";
 
