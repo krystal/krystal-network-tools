@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"golang.org/x/sync/errgroup"
 	"net"
 	"strconv"
 	"strings"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	pingttl "github.com/strideynet/go-ping-ttl"
+	"golang.org/x/sync/errgroup"
 )
 
 type tracerouteParams struct {
