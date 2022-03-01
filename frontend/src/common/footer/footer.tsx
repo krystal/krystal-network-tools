@@ -9,7 +9,6 @@ import {
   TagLabel,
 } from "@chakra-ui/react";
 import LogoIcon from "../icons/logo-icon";
-import { Link } from "react-router-dom";
 
 const Footer: FC = () => {
   return (
@@ -23,8 +22,8 @@ const Footer: FC = () => {
     >
       <Container maxW="container.lg" textAlign="center">
         <Tag
-          as={Link}
-          to="https://krystal.uk/"
+          as="a"
+          href="https://krystal.uk/"
           colorScheme="brand"
           size="lg"
           _hover={{ textDecoration: "underline" }}
