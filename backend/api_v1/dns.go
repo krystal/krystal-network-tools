@@ -105,6 +105,7 @@ func godnsLookup(log *zap.Logger, addr string, recordType uint16, hostname strin
 		log.Error("failed to connect to dns server", zap.Error(err))
 		return nil, err
 	}
+	defer conn.Close()
 
 	// Send the DNS message.
 	err = conn.WriteMsg(msg)
