@@ -166,7 +166,7 @@ func findNameserverHostname(log *zap.Logger, addr string, chunks []string) (stri
 func doDnsLookups(log *zap.Logger, dnsServer, recordType string, recursive bool, chunks []string) (map[string][]*DNSResponse, error) {
 	// Resolve the IP of the DNS server.
 	var addr string
-	server2addr := func() error {
+	setServerAddr := func() error {
 		rawAddr, err := net.ResolveIPAddr("ip", dnsServer)
 		if err != nil {
 			return err
@@ -174,7 +174,7 @@ func doDnsLookups(log *zap.Logger, dnsServer, recordType string, recursive bool,
 		addr = rawAddr.IP.String() + ":53"
 		return nil
 	}
-	if err := server2addr(); err != nil {
+	if err := setServerAddr(); err != nil {
 		return nil, err
 	}
 
@@ -191,7 +191,7 @@ func doDnsLookups(log *zap.Logger, dnsServer, recordType string, recursive bool,
 	} else {
 		// Turn it into the address.
 		dnsServer = host
-		if err = server2addr(); err != nil {
+		if err = setServerAddr(); err != nil {
 			return nil, err
 		}
 	}
@@ -217,7 +217,7 @@ func doDnsLookups(log *zap.Logger, dnsServer, recordType string, recursive bool,
 	}
 
 	// Try to update the DNS server used here.
-	if err = server2addr(); err != nil {
+	if err = setServerAddr(); err != nil {
 		return nil, err
 	}
 
