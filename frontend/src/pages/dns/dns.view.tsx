@@ -15,6 +15,7 @@ export type DnsResponse = {
     ttl: number;
     priority?: number;
     name: string;
+    dnsServer: string;
     value:
       | string
       | string[]

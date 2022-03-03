@@ -9,6 +9,7 @@ import {
   PopoverTrigger,
   Table,
   Tag,
+  Text,
   Tbody,
   Td,
   Th,
@@ -52,10 +53,19 @@ const DnsTableHead: FC<DnsTableProps> = ({ record }) => {
   );
 };
 
-const DnsTableRow: FC<{ row: DnsResponse[DnsType][number] }> = ({ row }) => {
+const DnsTableRow: FC<{ row: DnsResponse[DnsType][number], lastDnsServer: string | undefined }> = ({ row, lastDnsServer }) => {
   const arrowColor = useColorModeValue("gray.200", "gray.900");
+  const showLabel = lastDnsServer !== row.dnsServer;
 
-  return (
+  return <>
+    {
+      showLabel ? <Tr>
+        <Td>
+          <Text pr={5}>{row.dnsServer}</Text>
+        </Td>
+      </Tr> : null
+    }
+
     <Tr>
       <Td border="none">
         <Tag size="sm" fontWeight="bold" colorScheme={getDnsColor(row.type)}>
@@ -101,18 +111,21 @@ const DnsTableRow: FC<{ row: DnsResponse[DnsType][number] }> = ({ row }) => {
         </Td>
       )}
     </Tr>
-  );
+  </>;
 };
 
 const DnsTable: FC<DnsTableProps> = ({ record }) => {
+  let lastDnsServer: string | undefined;
   return (
     <Table variant="simple" w="100%" size="sm" minW="580px">
       <DnsTableHead record={record} />
 
       <Tbody>
-        {record.map((row, index) => (
-          <DnsTableRow key={index} row={row} />
-        ))}
+        {record.map((row, index) => {
+          const el = <DnsTableRow key={index} row={row} lastDnsServer={lastDnsServer} />;
+          lastDnsServer = row.dnsServer;
+          return el;
+        })}
       </Tbody>
     </Table>
   );
