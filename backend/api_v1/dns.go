@@ -380,7 +380,7 @@ func doDnsLookups(log *zap.Logger, dnsServer, recordType string, recursive bool,
 				// Make the response.
 				h := originalValue.Header()
 				r := &DNSResponse{
-					Type:         recordType,
+					Type:         record,
 					TTL:          h.Ttl,
 					Name:         strings.TrimRight(h.Name, "."),
 					Value:        data,
