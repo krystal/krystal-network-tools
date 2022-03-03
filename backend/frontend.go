@@ -4,7 +4,6 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"html/template"
 	"io"
 	"io/fs"
@@ -121,7 +120,6 @@ func errorFrontend(r *gin.Engine, logger *zap.Logger, err error, message string)
 	}
 	logger.Error(message+" - frontend will not be rendered", f...)
 	for k := range routes {
-		fmt.Println(k)
 		r.GET(k, func(c *gin.Context) {
 			c.String(http.StatusInternalServerError,
 				"failed to load frontend - please check console for details")
