@@ -254,7 +254,7 @@ func doDnsLookups(log *zap.Logger, dnsServer, recordType string, recursive bool,
 	eg := errgroup.Group{}
 	for i, recordLoop := range recordTypes {
 		// Get all items which may not be thread safe.
-		record := recordLoop
+		recordLoopName := recordLoop
 		packetType := recordTypesPacket[i]
 
 		// Do the DNS lookup.
@@ -276,7 +276,7 @@ func doDnsLookups(log *zap.Logger, dnsServer, recordType string, recursive bool,
 			parseAnswer:
 				switch x := v.(type) {
 				case *godns.CNAME:
-					if record == "CNAME" {
+					if recordLoopName == "CNAME" {
 						// This is to be expected here since we are looking for CNAME records.
 						b, _ := json.Marshal(x.Target)
 						data = b
@@ -298,7 +298,7 @@ func doDnsLookups(log *zap.Logger, dnsServer, recordType string, recursive bool,
 							}
 							if nsHost == "" {
 								// Unable to find NS record.
-								log.Warn("unable to find NS record", zap.String("hostname", strings.Join(cnameChunks, ".")))
+								log.Warn("unable to find NS recordLoopName", zap.String("hostname", strings.Join(cnameChunks, ".")))
 								continue answerIteration
 							}
 
@@ -307,39 +307,39 @@ func doDnsLookups(log *zap.Logger, dnsServer, recordType string, recursive bool,
 							if err != nil {
 								return err
 							}
-							addr := rawAddr.IP.String() + ":53"
+							nsAddr := rawAddr.IP.String() + ":53"
 
 							// Lookup the CNAME's value.
-							msg, err = godnsLookup(log, addr, packetType, x.Target)
+							cnameLookupMsg, err := godnsLookup(log, nsAddr, packetType, x.Target)
 							if err != nil {
 								return err
 							}
 
 							// If there is no answers, continue the root loop.
-							if len(msg.Answer) == 0 {
+							if len(cnameLookupMsg.Answer) == 0 {
 								continue answerIteration
 							}
 
 							// Check if this contains non-CNAME records.
-							for _, iface := range msg.Answer {
-								switch x := iface.(type) {
+							for _, iface := range cnameLookupMsg.Answer {
+								switch result := iface.(type) {
 								case *godns.CNAME:
 									// Ignore this.
 								default:
 									// We are past CNAME's!
-									v = x
+									v = result
 									resultDnsHost = nsHost
 									goto parseAnswer
 								}
 							}
 
 							// Set the next CNAME we are parsing.
-							x = msg.Answer[0].(*godns.CNAME)
+							x = cnameLookupMsg.Answer[0].(*godns.CNAME)
 
 							// Add 1 to the recursion count.
 							recursionCount++
 						}
-						return fmt.Errorf("record type %s for host %s has hit recursion limit", record, strings.Join(chunks, "."))
+						return fmt.Errorf("recordLoopName type %s for host %s has hit recursion limit", recordLoopName, strings.Join(chunks, "."))
 					}
 				default:
 					// Get the data from the record.
@@ -349,7 +349,7 @@ func doDnsLookups(log *zap.Logger, dnsServer, recordType string, recursive bool,
 					n := reflectType.NumField()
 					for i := 0; i < n; i++ {
 						f := reflectType.Field(i)
-						if strings.ToUpper(f.Name) == record {
+						if strings.ToUpper(f.Name) == recordLoopName {
 							// This is the field we want.
 							var err error
 							data, err = json.Marshal(reflectValue.FieldByName(f.Name).Interface())
@@ -381,7 +381,7 @@ func doDnsLookups(log *zap.Logger, dnsServer, recordType string, recursive bool,
 				// Make the response.
 				h := originalValue.Header()
 				r := &DNSResponse{
-					Type:         record,
+					Type:         recordLoopName,
 					TTL:          h.Ttl,
 					Name:         strings.TrimRight(h.Name, "."),
 					Value:        data,
@@ -391,7 +391,7 @@ func doDnsLookups(log *zap.Logger, dnsServer, recordType string, recursive bool,
 				}
 				dnsResponses = append(dnsResponses, r)
 			}
-			appendToRecordType(record, dnsResponses...)
+			appendToRecordType(recordLoopName, dnsResponses...)
 			return nil
 		})
 	}
