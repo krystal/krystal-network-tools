@@ -18,6 +18,9 @@ import (
 )
 
 type dnsParams struct {
+	// Cache is used to define if we should use the DNS cache for all lookups rather than the nameserver.
+	Cache bool `form:"cache"`
+
 	// Trace is used to define if the DNS record should be traced all the way to the nameserver.
 	Trace bool `form:"trace"`
 }
@@ -163,7 +166,7 @@ func findNameserverHostname(log *zap.Logger, addr string, chunks []string) (stri
 	return "", 0, 0, nil
 }
 
-func doDnsLookups(log *zap.Logger, dnsServer, recordType string, recursive bool, chunks []string) (map[string][]*DNSResponse, error) {
+func doDnsLookups(log *zap.Logger, dnsServer, recordType string, cache, recursive bool, chunks []string) (map[string][]*DNSResponse, error) {
 	// Resolve the IP of the DNS server.
 	var addr string
 	setServerAddr := func() error {
@@ -181,23 +184,29 @@ func doDnsLookups(log *zap.Logger, dnsServer, recordType string, recursive bool,
 	// Keep going through chunks until we get a NS record.
 	initAddr := addr
 	oldDnsServer := dnsServer
-	host, i, ttl, err := findNameserverHostname(log, addr, chunks)
-	if err != nil {
-		return nil, err
-	}
-	if host == "" {
-		// Unable to find NS record.
-		log.Warn("unable to find NS record", zap.String("hostname", strings.Join(chunks, ".")))
-	} else {
-		// Turn it into the address.
-		dnsServer = host
-		if err = setServerAddr(); err != nil {
+	var i int
+	var host string
+	var ttl uint32
+	var err error
+	if !cache {
+		host, i, ttl, err = findNameserverHostname(log, addr, chunks)
+		if err != nil {
 			return nil, err
+		}
+		if host == "" {
+			// Unable to find NS record.
+			log.Warn("unable to find NS record", zap.String("hostname", strings.Join(chunks, ".")))
+		} else {
+			// Turn it into the address.
+			dnsServer = host
+			if err = setServerAddr(); err != nil {
+				return nil, err
+			}
 		}
 	}
 
-	// If this was a NS lookup that is non-recursive, we have our result here.
-	if !recursive && recordType == "NS" {
+	// If this was a NS lookup that is non-recursive and not cached, we have our result here.
+	if !cache && !recursive && recordType == "NS" {
 		if i == 0 {
 			// This means that the NS record was on the record specified.
 			return map[string][]*DNSResponse{
@@ -216,9 +225,11 @@ func doDnsLookups(log *zap.Logger, dnsServer, recordType string, recursive bool,
 		return map[string][]*DNSResponse{"NS": {}}, nil
 	}
 
-	// Try to update the DNS server used here.
-	if err = setServerAddr(); err != nil {
-		return nil, err
+	// Try to update the DNS server used here if we aren't just relying on the cache.
+	if !cache {
+		if err = setServerAddr(); err != nil {
+			return nil, err
+		}
 	}
 
 	// Define the record types.
@@ -292,22 +303,28 @@ func doDnsLookups(log *zap.Logger, dnsServer, recordType string, recursive bool,
 							cnameChunks := strings.Split(chunkifyReady, ".")
 
 							// Get the NS host.
-							nsHost, _, _, err := findNameserverHostname(log, initAddr, cnameChunks)
-							if err != nil {
-								return err
-							}
-							if nsHost == "" {
-								// Unable to find NS record.
-								log.Warn("unable to find NS recordLoopName", zap.String("hostname", strings.Join(cnameChunks, ".")))
-								continue answerIteration
-							}
+							var nsHost, nsAddr string
+							if cache {
+								nsHost = dnsServer
+								nsAddr = addr
+							} else {
+								nsHost, _, _, err = findNameserverHostname(log, initAddr, cnameChunks)
+								if err != nil {
+									return err
+								}
+								if nsHost == "" {
+									// Unable to find NS record.
+									log.Warn("unable to find NS recordLoopName", zap.String("hostname", strings.Join(cnameChunks, ".")))
+									continue answerIteration
+								}
 
-							// Turn that into the address.
-							rawAddr, err := net.ResolveIPAddr("ip", nsHost)
-							if err != nil {
-								return err
+								// Turn that into the address.
+								rawAddr, err := net.ResolveIPAddr("ip", nsHost)
+								if err != nil {
+									return err
+								}
+								nsAddr = rawAddr.IP.String() + ":53"
 							}
-							nsAddr := rawAddr.IP.String() + ":53"
 
 							// Lookup the CNAME's value.
 							cnameLookupMsg, err := godnsLookup(log, nsAddr, packetType, x.Target)
@@ -405,7 +422,7 @@ func doDnsLookups(log *zap.Logger, dnsServer, recordType string, recursive bool,
 			x := i
 			eg.Go(func() error {
 				remainderChunks := chunks[x:]
-				map_, err := doDnsLookups(log, oldDnsServer, recordType, false, remainderChunks)
+				map_, err := doDnsLookups(log, oldDnsServer, recordType, cache, false, remainderChunks)
 				if err != nil {
 					return err
 				}
@@ -467,7 +484,7 @@ func dns(g *gin.RouterGroup, log *zap.Logger, dnsServer string) {
 		}
 
 		// Do the DNS lookup.
-		results, err := doDnsLookups(log, dnsServer, recordType, params.Trace, chunks)
+		results, err := doDnsLookups(log, dnsServer, recordType, params.Cache, params.Trace, chunks)
 		if err != nil {
 			context.Error(&gin.Error{
 				Type: gin.ErrorTypePublic,
