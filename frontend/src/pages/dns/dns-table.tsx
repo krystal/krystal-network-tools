@@ -34,23 +34,25 @@ const showPriority = (record: DnsResponse[DnsType]) =>
   !!record.find((item) => typeof item.priority !== "undefined");
 
 const DnsTableHead: FC<DnsTableProps> = ({ record }) => {
+  const headBg = useColorModeValue("gray.100", "gray.600");
+
   return (
     <Thead>
       <Tr>
-        <Th p={3} pl={5} border="none" bg="gray.100" borderLeftRadius="md">
+        <Th p={3} pl={5} border="none" bg={headBg} borderLeftRadius="md">
           Type
         </Th>
 
-        <Th p={3} border="none" bg="gray.100">
+        <Th p={3} border="none" bg={headBg}>
           Name
         </Th>
 
-        <Th p={3} border="none" bg="gray.100">
+        <Th p={3} border="none" bg={headBg}>
           TTL
         </Th>
 
         {showPriority(record) && (
-          <Th p={3} border="none" bg="gray.100">
+          <Th p={3} border="none" bg={headBg}>
             Priority
           </Th>
         )}
@@ -60,7 +62,7 @@ const DnsTableHead: FC<DnsTableProps> = ({ record }) => {
           pr={5}
           border="none"
           borderRightRadius="md"
-          bg="gray.100"
+          bg={headBg}
           colSpan={2}
           textAlign="right"
         >
@@ -128,6 +130,8 @@ const DnsTableRow: FC<DnsTableRowProps> = ({ row }) => {
 };
 
 const DnsTable: FC<DnsTableProps> = ({ record }) => {
+  const labelBg = useColorModeValue("gray.50", "gray.600");
+
   const groupedRecords = useMemo(() => {
     return record.reduce((groups, row) => {
       const previous = groups[row.dnsServer] || [];
@@ -153,7 +157,14 @@ const DnsTable: FC<DnsTableProps> = ({ record }) => {
                 px={0}
                 border="none"
               >
-                <Box py={3} px={5} w="100%" bg="gray.50" borderRadius="md">
+                <Box
+                  py={3}
+                  px={5}
+                  w="100%"
+                  bg={labelBg}
+                  opacity={0.8}
+                  borderRadius="md"
+                >
                   <Text fontFamily="monospace" fontWeight="bold">
                     {dnsServer}
                   </Text>
