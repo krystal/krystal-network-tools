@@ -20,6 +20,7 @@ const dnsSchema = z.object({
     })
     .min(1, "A hostname or IP address is required"),
   type: z.nativeEnum(DnsType),
+  cache: z.boolean(),
   trace: z.boolean(),
 });
 
