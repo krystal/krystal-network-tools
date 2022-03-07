@@ -3,22 +3,13 @@ package dns
 import (
 	"go.uber.org/zap"
 	"os"
-	"regexp"
 )
-
-var portRe = regexp.MustCompile(":[0-9]+$")
 
 // GetCachedDNSServer is used to get the cache DNS server.
 func GetCachedDNSServer(log *zap.Logger) string {
 	// Handle the environment variable override.
 	s := os.Getenv("DNS_SERVER")
 	if s != "" {
-		// Check if a port is attached.
-		if !portRe.MatchString(s) {
-			s += ":53"
-		}
-
-		// Very poggers. Return here.
 		return s
 	}
 
@@ -36,8 +27,5 @@ func GetCachedDNSServer(log *zap.Logger) string {
 		panic("no DNS server found")
 	}
 	s = ns[len(ns)-1]
-	if !portRe.MatchString(s) {
-		s += ":53"
-	}
 	return s
 }

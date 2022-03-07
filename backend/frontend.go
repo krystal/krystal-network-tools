@@ -186,8 +186,8 @@ func initFrontend(r *gin.Engine, f fs.FS, logger *zap.Logger) {
   url: /`)
 		} else {
 			errorFrontend(r, logger, nil, "error reading regions.yml")
+			return
 		}
-		return
 	}
 
 	// Attempt to unmarshal the YAML.

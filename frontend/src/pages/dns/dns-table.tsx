@@ -1,4 +1,4 @@
-import { FC } from "react";
+import { FC, useMemo } from "react";
 
 import {
   Button,
@@ -9,6 +9,8 @@ import {
   PopoverTrigger,
   Table,
   Tag,
+  Box,
+  Text,
   Tbody,
   Td,
   Th,
@@ -28,23 +30,40 @@ type DnsTableProps = {
   record: DnsResponse[DnsType];
 };
 
-const DnsTableHead: FC<DnsTableProps> = ({ record }) => {
-  const wideValue = !record.find((item) => typeof item.value !== "string");
+const showPriority = (record: DnsResponse[DnsType]) =>
+  !!record.find((item) => typeof item.priority !== "undefined");
 
+const DnsTableHead: FC<DnsTableProps> = ({ record }) => {
   return (
     <Thead>
       <Tr>
-        <Th border="none">Type</Th>
+        <Th p={3} pl={5} border="none" bg="gray.100" borderLeftRadius="md">
+          Type
+        </Th>
 
-        <Th border="none">Name</Th>
+        <Th p={3} border="none" bg="gray.100">
+          Name
+        </Th>
 
-        <Th border="none">TTL</Th>
+        <Th p={3} border="none" bg="gray.100">
+          TTL
+        </Th>
 
-        {record.find((item) => typeof item.priority !== "undefined") && (
-          <Th border="none">Priority</Th>
+        {showPriority(record) && (
+          <Th p={3} border="none" bg="gray.100">
+            Priority
+          </Th>
         )}
 
-        <Th border="none" colSpan={wideValue ? 2 : 1}>
+        <Th
+          p={3}
+          pr={5}
+          border="none"
+          borderRightRadius="md"
+          bg="gray.100"
+          colSpan={2}
+          textAlign="right"
+        >
           Value
         </Th>
       </Tr>
@@ -52,7 +71,11 @@ const DnsTableHead: FC<DnsTableProps> = ({ record }) => {
   );
 };
 
-const DnsTableRow: FC<{ row: DnsResponse[DnsType][number] }> = ({ row }) => {
+type DnsTableRowProps = {
+  row: DnsResponse[DnsType][number];
+};
+
+const DnsTableRow: FC<DnsTableRowProps> = ({ row }) => {
   const arrowColor = useColorModeValue("gray.200", "gray.900");
 
   return (
@@ -74,13 +97,13 @@ const DnsTableRow: FC<{ row: DnsResponse[DnsType][number] }> = ({ row }) => {
       )}
 
       {typeof row.value === "string" && (
-        <Td border="none" colSpan={2} height="32px">
+        <Td border="none" colSpan={2} height="32px" textAlign="right">
           <Code isTruncated>{row.value}</Code>
         </Td>
       )}
 
       {typeof row.value !== "string" && (
-        <Td border="none">
+        <Td border="none" colSpan={2} textAlign="right">
           <Popover>
             <PopoverTrigger>
               <Button size="sm" leftIcon={<FaEye />}>
@@ -105,13 +128,43 @@ const DnsTableRow: FC<{ row: DnsResponse[DnsType][number] }> = ({ row }) => {
 };
 
 const DnsTable: FC<DnsTableProps> = ({ record }) => {
+  const groupedRecords = useMemo(() => {
+    return record.reduce((groups, row) => {
+      const previous = groups[row.dnsServer] || [];
+
+      return {
+        ...groups,
+        [row.dnsServer]: [...previous, row],
+      };
+    }, {} as { [k: string]: DnsResponse[DnsType] });
+  }, [record]);
+
   return (
     <Table variant="simple" w="100%" size="sm" minW="580px">
       <DnsTableHead record={record} />
 
       <Tbody>
-        {record.map((row, index) => (
-          <DnsTableRow key={index} row={row} />
+        {Object.keys(groupedRecords).map((dnsServer) => (
+          <>
+            <Tr>
+              <Td
+                colspan={showPriority(record) ? 6 : 5}
+                py={1}
+                px={0}
+                border="none"
+              >
+                <Box py={3} px={5} w="100%" bg="gray.50" borderRadius="md">
+                  <Text fontFamily="monospace" fontWeight="bold">
+                    {dnsServer}
+                  </Text>
+                </Box>
+              </Td>
+            </Tr>
+
+            {groupedRecords[dnsServer].map((row, index) => (
+              <DnsTableRow key={index} row={row} />
+            ))}
+          </>
         ))}
       </Tbody>
     </Table>
