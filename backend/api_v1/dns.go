@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net"
 	"reflect"
 	"sort"
@@ -128,9 +129,11 @@ type DNSResponse struct {
 
 func godnsLookup(log *zap.Logger, cacher cacher, addr string, recordType uint16, hostname string) (*godns.Msg, error) {
 	// Return from cache if we have it.
-	cached := cacher.lookup(log, recordType, hostname, addr)
-	if cached != nil {
-		return cached, nil
+	if cacher != nil {
+		cached := cacher.lookup(log, recordType, hostname, addr)
+		if cached != nil {
+			return cached, nil
+		}
 	}
 
 	// Create the DNS message.
@@ -163,7 +166,9 @@ func godnsLookup(log *zap.Logger, cacher cacher, addr string, recordType uint16,
 		log.Error("failed to read from dns server", zap.Error(err))
 	}
 	if err == nil {
-		cacher.write(recordType, hostname, addr, msg)
+		if cacher != nil {
+			cacher.write(recordType, hostname, addr, msg)
+		}
 	}
 	return msg, err
 }
@@ -264,16 +269,9 @@ func chunkifyHost(hostname string) []string {
 }
 
 func resolveDnsLookup(log *zap.Logger, cacher cacher, nameserver, recordType, lookup string, cache bool) (responses []*DNSResponse, err error) {
-	// Turn the nameserver into an IP address.
-	ipAddr, err := net.ResolveIPAddr("ip", strings.TrimRight(nameserver, "."))
-	if err != nil {
-		log.Error("failed to resolve nameserver", zap.Error(err))
-		return nil, err
-	}
-	host := ipAddr.String() + ":53"
-
 	// Do the main DNS lookup.
-	result, err := godnsLookup(log, cacher, host, godns.StringToType[recordType], lookup)
+	addr := nameserver + ":53"
+	result, err := godnsLookup(log, cacher, addr, godns.StringToType[recordType], lookup)
 	if err != nil {
 		log.Error("failed to lookup DNS record", zap.Error(err))
 		return nil, err
@@ -439,12 +437,75 @@ func resolveDnsLookup(log *zap.Logger, cacher cacher, nameserver, recordType, lo
 	return
 }
 
+func findAuthoritativeNameserver(log *zap.Logger, hostname string) (string, []*DNSResponse, error) {
+	// Select a root nameserver to begin our search
+	rootNameserver := dnsTools.NextRootServer()
+
+	resp := []*DNSResponse{}
+	var recursiveSearch func(iteration int, nameserver string) (string, error)
+	recursiveSearch = func(iteration int, nameserver string) (string, error) {
+		msg, err := godnsLookup(log, nil, nameserver+":53", godns.TypeNS, hostname)
+		if err != nil {
+			return "", err
+		}
+
+		for _, answer := range append(msg.Answer, msg.Ns...) {
+			nsRecord, ok := answer.(*godns.NS)
+			if !ok {
+				return "", fmt.Errorf("unexpected godns type: %T", answer)
+			}
+			b, _ := json.Marshal(nsRecord.Ns)
+			resp = append(resp, &DNSResponse{
+				DNSServer:    nameserver,
+				Type:         "NS",
+				Name:         strings.TrimRight(nsRecord.Header().Name, "."),
+				Value:        b,
+				TTL:          answer.Header().Ttl,
+				dnsStringify: nsRecord.String,
+			})
+		}
+
+		if len(msg.Answer) > 0 {
+			authoritativeNameserver := msg.Answer[rand.Intn(len(msg.Answer))]
+
+			nameserverRecord, ok := authoritativeNameserver.(*godns.NS)
+			if !ok {
+				return "", fmt.Errorf("unexpected godns type: %T", authoritativeNameserver)
+			}
+
+			return strings.TrimRight(nameserverRecord.Ns, "."), nil
+		}
+
+		if len(msg.Ns) == 0 {
+			// If it doesn't return a answer, or somewhere we can go for an answer
+			// we are effectively lost !
+			return "", errors.New("no answer or authoritive server provided in dns response")
+		}
+
+		nextNameserver := msg.Ns[rand.Intn(len(msg.Ns))]
+
+		nameserverRecord, ok := nextNameserver.(*godns.NS)
+		if !ok {
+			return "", fmt.Errorf("unexpected godns type: %T", nextNameserver)
+		}
+
+		iteration += 1
+
+		return recursiveSearch(iteration, nameserverRecord.Ns)
+	}
+
+	authoritativeNameserver, err := recursiveSearch(0, rootNameserver)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return authoritativeNameserver, resp, nil
+}
+
 func doDnsLookups(log *zap.Logger, dnsServer, recordType, hostname string, fullTrace bool) (map[string][]*DNSResponse, error) {
-	// Get the record types.
-	recordTypes := []string{strings.ToUpper(recordType)}
-	if recordType == "ANY" {
-		// Not many DNS resolvers support this anymore, set it to literally all record types.
-		recordTypes = []string{"A", "AAAA", "CNAME", "MX", "NS", "PTR", "SOA", "TXT"}
+	// Handle if the hostname doesn't end with a dot.
+	if !strings.HasSuffix(hostname, ".") {
+		hostname += "."
 	}
 
 	// Create the response map.
@@ -453,21 +514,20 @@ func doDnsLookups(log *zap.Logger, dnsServer, recordType, hostname string, fullT
 	// Defines the mutex for the responses.
 	responsesLock := sync.Mutex{}
 
-	// Turn the hostname into chunks.
-	chunks := chunkifyHost(hostname)
-
 	// Create the cacher.
 	cacher := &inMemoryCacher{cache: map[uint16]map[string]*godns.Msg{}}
 
 	// Handle non-full trace lookups.
 	if !fullTrace {
+		// Get the record types.
+		recordTypes := []string{strings.ToUpper(recordType)}
+		if recordType == "ANY" {
+			// Not many DNS resolvers support this anymore, set it to literally all record types.
+			recordTypes = []string{"A", "AAAA", "CNAME", "MX", "PTR", "SOA", "TXT", "NS"}
+		}
+
 		// Create the error groups.
 		eg := errgroup.Group{}
-
-		// Handle if the hostname doesn't end with a dot.
-		if !strings.HasSuffix(hostname, ".") {
-			hostname += "."
-		}
 
 		// Go through each record type and do the lookups.
 		for _, recordLoop := range recordTypes {
@@ -491,49 +551,47 @@ func doDnsLookups(log *zap.Logger, dnsServer, recordType, hostname string, fullT
 		return responses, nil
 	}
 
-	// Reverse the chunks.
-	reversedChunks := reverseStringSlice(chunks)
+	// Handle a full trace search
+	authoritativeNameserver, answer, err := findAuthoritativeNameserver(log, hostname)
+	if err != nil {
+		return nil, err
+	}
 
-	// Go through each chunk part.
-	for i := 0; i < len(reversedChunks); i++ {
-		// Get the part of the chunks this is referring to.
-		chunkPart := reverseStringSlice(reversedChunks[:i+1])
+	responses["NS"] = answer
 
-		// Get the first i items from the slice.
-		hostname = strings.Join(chunkPart, ".") + "."
+	// Get the record types.
+	recordTypes := []string{strings.ToUpper(recordType)}
+	if recordType == "ANY" {
+		// Not many DNS resolvers support this anymore, set it to literally all record types.
+		recordTypes = []string{"A", "AAAA", "CNAME", "MX", "PTR", "SOA", "TXT", "NS"}
+	} else if recordTypes[0] == "NS" {
+		// We already have this data. Make this a blank slice.
+		recordTypes = []string{}
+	}
 
-		// Find the nameserver.
-		nameServer, err := findNameserver(log, cacher, chunkPart, 0)
-		if err != nil {
-			return nil, err
-		}
+	eg := errgroup.Group{}
+	// Spawn a goroutine to look up each record type.
+	for _, recordLoop := range recordTypes {
+		record := recordLoop
+		eg.Go(func() error {
+			r, err := resolveDnsLookup(log, cacher, authoritativeNameserver, record, hostname, false)
+			if err != nil {
+				return err
+			}
+			responsesLock.Lock()
+			x := responses[record]
+			if x == nil {
+				x = []*DNSResponse{}
+			}
+			responses[record] = append(x, r...)
+			responsesLock.Unlock()
+			return nil
+		})
+	}
 
-		// Create an error group.
-		eg := errgroup.Group{}
-
-		// Spawn a goroutine to look up each record type.
-		for _, recordLoop := range recordTypes {
-			record := recordLoop
-			eg.Go(func() error {
-				r, err := resolveDnsLookup(log, cacher, nameServer, record, hostname, false)
-				if err != nil {
-					return err
-				}
-				responsesLock.Lock()
-				x := responses[record]
-				if x == nil {
-					x = []*DNSResponse{}
-				}
-				responses[record] = append(x, r...)
-				responsesLock.Unlock()
-				return nil
-			})
-		}
-
-		// Wait for the results.
-		if err := eg.Wait(); err != nil {
-			return nil, err
-		}
+	// Wait for the results.
+	if err := eg.Wait(); err != nil {
+		return nil, err
 	}
 
 	// Return the responses.
