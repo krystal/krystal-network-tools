@@ -9,25 +9,30 @@ import { DnsType } from "./dns.schema";
 import DnsTable from "./dns-table";
 import { getDnsColor } from "./dns.helpers";
 
+type DnsRecord = {
+  type: DnsType;
+  ttl: number;
+  priority?: number;
+  name: string;
+  dnsServer: string;
+  value:
+    | string
+    | string[]
+    | {
+        expire: number;
+        mbox: string;
+        minttl: number;
+        ns: string;
+        refresh: number;
+        retry: number;
+        serial: number;
+      };
+}
+
 export type DnsResponse = {
   [key in DnsType]: {
-    type: DnsType;
-    ttl: number;
-    priority?: number;
-    name: string;
-    dnsServer: string;
-    value:
-      | string
-      | string[]
-      | {
-          expire: number;
-          mbox: string;
-          minttl: number;
-          ns: string;
-          refresh: number;
-          retry: number;
-          serial: number;
-        };
+    server: string;
+    records: DnsRecord[];
   }[];
 };
 
@@ -44,9 +49,9 @@ const Dns: FC = () => {
       <Card>
         <DnsForm
           disabled={false}
-          onSubmit={async ({ host, type, trace, cache }) => {
+          onSubmit={async ({ host, type, trace }) => {
             const result = await request<DnsResponse>(
-              endpoint("/dns/:type/:host", { host, type, trace, cache })
+              endpoint("/dns/:type/:host", { host, type, trace })
             );
             setResult(result);
           }}
