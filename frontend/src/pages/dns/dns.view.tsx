@@ -44,9 +44,9 @@ const Dns: FC = () => {
       <Card>
         <DnsForm
           disabled={false}
-          onSubmit={async ({ host, type, trace, cache }) => {
+          onSubmit={async ({ host, type, trace }) => {
             const result = await request<DnsResponse>(
-              endpoint("/dns/:type/:host", { host, type, trace, cache })
+              endpoint("/dns/:type/:host", { host, type, trace })
             );
             setResult(result);
           }}
