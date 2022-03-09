@@ -56,9 +56,6 @@ type cacher interface {
 var _ cacher = &inMemoryCacher{}
 
 type dnsParams struct {
-	// Cache is used to define if we should use the DNS cache for all lookups rather than the nameserver.
-	Cache bool `form:"cache"`
-
 	// Trace is used to define if the DNS record should be traced all the way to the nameserver.
 	Trace bool `form:"trace"`
 }
@@ -442,7 +439,7 @@ func resolveDnsLookup(log *zap.Logger, cacher cacher, nameserver, recordType, lo
 	return
 }
 
-func doDnsLookups(log *zap.Logger, dnsServer, recordType, hostname string, cache, recursive bool) (map[string][]*DNSResponse, error) {
+func doDnsLookups(log *zap.Logger, dnsServer, recordType, hostname string, fullTrace bool) (map[string][]*DNSResponse, error) {
 	// Get the record types.
 	recordTypes := []string{strings.ToUpper(recordType)}
 	if recordType == "ANY" {
@@ -462,18 +459,8 @@ func doDnsLookups(log *zap.Logger, dnsServer, recordType, hostname string, cache
 	// Create the cacher.
 	cacher := &inMemoryCacher{cache: map[uint16]map[string]*godns.Msg{}}
 
-	// Handle non-recursive lookups.
-	if !recursive {
-		// Find the name server.
-		nameServer := dnsServer
-		if !cache {
-			var err error
-			nameServer, err = findNameserver(log, cacher, chunks, 0)
-			if err != nil {
-				return nil, err
-			}
-		}
-
+	// Handle non-full trace lookups.
+	if !fullTrace {
 		// Create the error groups.
 		eg := errgroup.Group{}
 
@@ -486,7 +473,7 @@ func doDnsLookups(log *zap.Logger, dnsServer, recordType, hostname string, cache
 		for _, recordLoop := range recordTypes {
 			record := recordLoop
 			eg.Go(func() error {
-				r, err := resolveDnsLookup(log, cacher, nameServer, record, hostname, cache)
+				r, err := resolveDnsLookup(log, cacher, dnsServer, record, hostname, true)
 				if err != nil {
 					return err
 				}
@@ -528,7 +515,7 @@ func doDnsLookups(log *zap.Logger, dnsServer, recordType, hostname string, cache
 		for _, recordLoop := range recordTypes {
 			record := recordLoop
 			eg.Go(func() error {
-				r, err := resolveDnsLookup(log, cacher, nameServer, record, hostname, cache)
+				r, err := resolveDnsLookup(log, cacher, nameServer, record, hostname, false)
 				if err != nil {
 					return err
 				}
@@ -583,7 +570,7 @@ func dns(g *gin.RouterGroup, log *zap.Logger, dnsServer string) {
 		}
 
 		// Do the DNS lookup.
-		results, err := doDnsLookups(log, dnsServer, recordType, hostname, params.Cache, params.Trace)
+		results, err := doDnsLookups(log, dnsServer, recordType, hostname, params.Trace)
 		if err != nil {
 			context.Error(&gin.Error{
 				Type: gin.ErrorTypePublic,
