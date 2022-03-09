@@ -12,10 +12,48 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gobeam/stringy"
+	dnsTools "github.com/krystal/krystal-network-tools/backend/dns"
 	godns "github.com/miekg/dns"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
+
+type inMemoryCacher struct {
+	sync.RWMutex
+	cache map[uint16]map[string]*godns.Msg
+}
+
+func (m *inMemoryCacher) lookup(log *zap.Logger, recordType uint16, domain, nameServer string) *godns.Msg {
+	m.RLock()
+	defer m.RUnlock()
+	recordCache := m.cache[recordType]
+	if recordCache == nil {
+		return nil
+	}
+	res, ok := recordCache[domain+"\n"+nameServer]
+	if ok {
+		log.Info("request cache hit!", zap.String("domain", domain), zap.String("nameServer", nameServer))
+	}
+	return res
+}
+
+func (m *inMemoryCacher) write(recordType uint16, domain, nameServer string, msg *godns.Msg) {
+	m.Lock()
+	defer m.Unlock()
+	recordCache := m.cache[recordType]
+	if recordCache == nil {
+		recordCache = map[string]*godns.Msg{}
+		m.cache[recordType] = recordCache
+	}
+	recordCache[domain+"\n"+nameServer] = msg
+}
+
+type cacher interface {
+	lookup(log *zap.Logger, recordType uint16, domain, nameServer string) *godns.Msg
+	write(recordType uint16, domain, nameServer string, msg *godns.Msg)
+}
+
+var _ cacher = &inMemoryCacher{}
 
 type dnsParams struct {
 	// Cache is used to define if we should use the DNS cache for all lookups rather than the nameserver.
@@ -91,7 +129,13 @@ type DNSResponse struct {
 	dnsStringify func() string
 }
 
-func godnsLookup(log *zap.Logger, addr string, recordType uint16, hostname string) (*godns.Msg, error) {
+func godnsLookup(log *zap.Logger, cacher cacher, addr string, recordType uint16, hostname string) (*godns.Msg, error) {
+	// Return from cache if we have it.
+	cached := cacher.lookup(log, recordType, hostname, addr)
+	if cached != nil {
+		return cached, nil
+	}
+
 	// Create the DNS message.
 	msg := &godns.Msg{}
 	msg.Id = godns.Id()
@@ -121,330 +165,391 @@ func godnsLookup(log *zap.Logger, addr string, recordType uint16, hostname strin
 	if err != nil {
 		log.Error("failed to read from dns server", zap.Error(err))
 	}
+	if err == nil {
+		cacher.write(recordType, hostname, addr, msg)
+	}
 	return msg, err
 }
 
-func findNameserverHostname(log *zap.Logger, addr string, chunks []string) (string, int, uint32, error) {
-	var msg *godns.Msg
-	var err error
-	for i := 0; i < len(chunks); i++ {
-		// Compile this set of chunks.
-		hostname := strings.Join(chunks[i:], ".") + "."
-
-		// Do the DNS lookup.
-		recursionCount := 0
-	lookup:
-		msg, err = godnsLookup(log, addr, godns.StringToType["NS"], hostname)
-		if err != nil {
-			continue
-		}
-
-		// Find the answer.
-		if len(msg.Answer) > 0 {
-			switch x := msg.Answer[0].(type) {
-			case *godns.NS:
-				return x.Ns, i, x.Hdr.Ttl, nil
-			case *godns.CNAME:
-				if recursionCount == 50 {
-					return "", 0, 0, fmt.Errorf("recursion limit reached on %s", hostname)
-				}
-				hostname = x.Target
-				recursionCount++
-				goto lookup
-			default:
-				return "", 0, 0, errors.New("invalid type for NS record")
-			}
-		}
+func reverseStringSlice(s []string) []string {
+	cpy := make([]string, len(s))
+	copy(cpy, s)
+	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
+		cpy[i], cpy[j] = cpy[j], cpy[i]
 	}
-	if err != nil {
-		// Errored whilst trying to find NS record.
-		return "", 0, 0, err
-	}
-
-	// Unable to find NS record.
-	log.Warn("unable to find NS record", zap.String("hostname", strings.Join(chunks, ".")))
-	return "", 0, 0, nil
+	return cpy
 }
 
-func doDnsLookups(log *zap.Logger, dnsServer, recordType string, cache, recursive bool, chunks []string) (map[string][]*DNSResponse, error) {
-	// Resolve the IP of the DNS server.
-	var addr string
-	setServerAddr := func() error {
-		rawAddr, err := net.ResolveIPAddr("ip", dnsServer)
-		if err != nil {
-			return err
-		}
-		addr = rawAddr.IP.String() + ":53"
-		return nil
+func findNameserver(log *zap.Logger, cacher cacher, chunks []string, recursionCount int) (string, error) {
+	// Handle the recursion limit.
+	if recursionCount > 10 {
+		return "", errors.New("recursion limit reached")
 	}
-	if err := setServerAddr(); err != nil {
+
+	// Reverse the chunks.
+	chunksReversed := reverseStringSlice(chunks)
+
+	// Defines the nameserver.
+	ns := dnsTools.NextRootServer()
+
+	// Handle the root nameserver.
+	if len(chunks) == 1 {
+		return ns, nil
+	}
+
+	// Go through each chunk until we find the end.
+	for i := 0; i < len(chunksReversed); i++ {
+		// Get the first i items of the slice.
+		chunksToGet := chunksReversed[:i+1]
+
+		// Get the hostname.
+		hostname := strings.Join(reverseStringSlice(chunksToGet), ".") + "."
+
+		// Turn the nameserver into an IP address.
+		ipAddr, err := net.ResolveIPAddr("ip", strings.TrimRight(ns, "."))
+		if err != nil {
+			log.Error("failed to resolve nameserver", zap.Error(err))
+			return "", err
+		}
+		host := ipAddr.String() + ":53"
+
+		// Lookup the hostname.
+		msg, err := godnsLookup(log, cacher, host, godns.StringToType["NS"], hostname)
+		if err != nil {
+			return "", err
+		}
+
+		// If we got no NS records, return an error.
+		if len(msg.Answer) == 0 {
+			// Handle if it's stored in msg.Ns.
+			if len(msg.Ns) > 0 {
+				switch t := msg.Ns[0].(type) {
+				case *godns.SOA:
+					ns = t.Ns
+				case *godns.NS:
+					ns = t.Ns
+				}
+				continue
+			}
+
+			// Otherwise, throw an error.
+			return "", fmt.Errorf("no NS records found for %s", hostname)
+		}
+
+		// Set the first NS record to the next name server.
+		switch t := msg.Answer[0].(type) {
+		case *godns.SOA:
+			ns = t.Ns
+		case *godns.NS:
+			ns = t.Ns
+		case *godns.CNAME:
+			// Recursively hunt for the NS record.
+			return findNameserver(log, cacher, chunkifyHost(t.Target), recursionCount+1)
+		default:
+			return "", fmt.Errorf("unexpected record type %T", t)
+		}
+	}
+
+	// Return the last name server.
+	return ns, nil
+}
+
+func chunkifyHost(hostname string) []string {
+	hostname = strings.TrimSuffix(hostname, ".")
+	s := strings.Split(hostname, ".")
+	noBlanks := make([]string, 0, len(s))
+	for _, v := range s {
+		if v != "" {
+			noBlanks = append(noBlanks, v)
+		}
+	}
+	return noBlanks
+}
+
+func resolveDnsLookup(log *zap.Logger, cacher cacher, nameserver, recordType, lookup string, cache bool) (responses []*DNSResponse, err error) {
+	// Turn the nameserver into an IP address.
+	ipAddr, err := net.ResolveIPAddr("ip", strings.TrimRight(nameserver, "."))
+	if err != nil {
+		log.Error("failed to resolve nameserver", zap.Error(err))
+		return nil, err
+	}
+	host := ipAddr.String() + ":53"
+
+	// Do the main DNS lookup.
+	result, err := godnsLookup(log, cacher, host, godns.StringToType[recordType], lookup)
+	if err != nil {
+		log.Error("failed to lookup DNS record", zap.Error(err))
 		return nil, err
 	}
 
-	// Keep going through chunks until we get a NS record.
-	initAddr := addr
-	oldDnsServer := dnsServer
-	var i int
-	var host string
-	var ttl uint32
-	var err error
-	if !cache {
-		host, i, ttl, err = findNameserverHostname(log, addr, chunks)
-		if err != nil {
-			return nil, err
+	// Defines a higher level slice for the responses.
+	responses = make([]*DNSResponse, 0, len(result.Answer))
+
+	// Defines a map to deduplicate the responses.
+	dedupe := map[string]struct{}{}
+
+	// Go through each answer and check if we need to do any traversals.
+	answers := result.Answer
+	if len(answers) == 0 && recordType == "NS" {
+		answers = result.Ns
+	}
+	for _, v := range answers {
+		// Defines this records nameserver.
+		answerNameserver := nameserver
+
+		// Defines the value responses.
+		valueResponses := []godns.RR{v}
+
+		// If this is a CNAME and we do not expect this, traverse through until we find what the user is after.
+		if recordType != "CNAME" {
+			if startCname, ok := v.(*godns.CNAME); ok {
+				recursionCount := 0
+				for {
+					// Check the recursion count.
+					if recursionCount > 10 {
+						return nil, fmt.Errorf("recursion limit reached for CNAME %s", startCname)
+					}
+
+					// Get the CNAME.
+					cname := v.(*godns.CNAME)
+
+					// Turn this host into chunks.
+					chunks := chunkifyHost(cname.Target)
+
+					// Get the nameserver if this isn't a cache.
+					if !cache {
+						answerNameserver, err = findNameserver(log, cacher, chunks, 0)
+						if err != nil {
+							return nil, err
+						}
+					}
+
+					// Turn the name server into an IP address.
+					ipAddr, err := net.ResolveIPAddr("ip", strings.TrimRight(answerNameserver, "."))
+					if err != nil {
+						log.Error("failed to resolve nameserver", zap.Error(err))
+						return nil, err
+					}
+					host := ipAddr.String() + ":53"
+
+					// Do the record lookup.
+					traverseResult, err := godnsLookup(log, cacher, host, godns.StringToType[recordType], cname.Target)
+					if err != nil {
+						log.Error("failed to lookup DNS record", zap.Error(err))
+						return nil, err
+					}
+
+					// If there's nothing on this host, break here.
+					if len(traverseResult.Answer) == 0 {
+						if recordType == "NS" {
+							// Handle if it's stored in the slice.
+							results := make([]godns.RR, 0, len(traverseResult.Ns))
+							for _, v := range traverseResult.Ns {
+								results = append(results, v)
+							}
+						} else {
+							// There's no way there can be any records here.
+							valueResponses = []godns.RR{}
+						}
+						break
+					}
+
+					// Handle CNAME's.
+					results := make([]godns.RR, 0, len(traverseResult.Answer))
+					for _, v := range traverseResult.Answer {
+						if cname, ok = v.(*godns.CNAME); !ok {
+							results = append(results, v)
+						}
+					}
+
+					// If we have found the non-CNAME records, break here.
+					if len(results) > 0 {
+						valueResponses = results
+						break
+					}
+
+					// Set v to the new CNAME.
+					v = cname
+
+					// Add 1 to the recursion count.
+					recursionCount++
+				}
+			}
 		}
-		if host == "" {
-			// Unable to find NS record.
-			log.Warn("unable to find NS record", zap.String("hostname", strings.Join(chunks, ".")))
-		} else {
-			// Turn it into the address.
-			dnsServer = host
-			if err = setServerAddr(); err != nil {
-				return nil, err
+
+		// Go through each value.
+		for _, v := range valueResponses {
+			// Get the data from the record.
+			// Due to the nature of the library, this is sadly a little magical.
+			var data []byte
+			reflectValue := reflect.Indirect(reflect.ValueOf(v))
+			reflectType := reflectValue.Type()
+			n := reflectType.NumField()
+			if recordType == "CNAME" {
+				data, _ = json.Marshal(v.(*godns.CNAME).Target)
+			} else {
+				for i := 0; i < n; i++ {
+					f := reflectType.Field(i)
+					if strings.ToUpper(f.Name) == recordType {
+						// This is the field we want.
+						var err error
+						data, err = json.Marshal(reflectValue.FieldByName(f.Name).Interface())
+						if err != nil {
+							return nil, fmt.Errorf("failed to marshal json: %v", err)
+						}
+						break
+					}
+				}
+			}
+			if data == nil {
+				// In this situation, we will throw it into the JSON cleanifier.
+				data, err = json.Marshal(jsonCleanifier{
+					Value:      v,
+					RemoveKeys: []string{"Hdr"},
+				})
+				if err != nil {
+					return nil, fmt.Errorf("failed to marshal json: %v", err)
+				}
+			}
+
+			// Handle the priority for MX records.
+			var preference *uint16
+			if mx, ok := v.(*godns.MX); ok {
+				preference = &mx.Preference
+			}
+
+			// Append the result if it's unique.
+			h := v.Header()
+			x := &DNSResponse{
+				Type:         recordType,
+				TTL:          h.Ttl,
+				Name:         strings.TrimRight(lookup, "."),
+				Value:        data,
+				Preference:   preference,
+				dnsStringify: v.String,
+			}
+			b, _ := json.Marshal(x)
+			_, ok := dedupe[string(b)]
+			if !ok {
+				dedupe[string(b)] = struct{}{}
+				x.DNSServer = strings.TrimRight(answerNameserver, ".")
+				responses = append(responses, x)
 			}
 		}
 	}
 
-	// If this was a NS lookup that is non-recursive and not cached, we have our result here.
-	if !cache && !recursive && recordType == "NS" {
-		if i == 0 {
-			// This means that the NS record was on the record specified.
-			return map[string][]*DNSResponse{
-				"NS": {
-					{
-						Type:      recordType,
-						TTL:       ttl,
-						Name:      strings.TrimRight(dnsServer, "."),
-						DNSServer: oldDnsServer,
-					},
-				},
-			}, nil
-		}
+	// No errors!
+	return
+}
 
-		// No DNS records were found.
-		return map[string][]*DNSResponse{"NS": {}}, nil
-	}
-
-	// Try to update the DNS server used here if we aren't just relying on the cache.
-	if !cache {
-		if err = setServerAddr(); err != nil {
-			return nil, err
-		}
-	}
-
-	// Define the record types.
-	recordTypes := []string{recordType}
+func doDnsLookups(log *zap.Logger, dnsServer, recordType, hostname string, cache, recursive bool) (map[string][]*DNSResponse, error) {
+	// Get the record types.
+	recordTypes := []string{strings.ToUpper(recordType)}
 	if recordType == "ANY" {
 		// Not many DNS resolvers support this anymore, set it to literally all record types.
 		recordTypes = []string{"A", "AAAA", "CNAME", "MX", "NS", "PTR", "SOA", "TXT"}
 	}
-	recordTypesPacket := make([]uint16, len(recordTypes))
-	for i, v := range recordTypes {
-		packetType, ok := godns.StringToType[v]
-		if !ok {
-			return nil, errors.New("invalid record type: " + v)
-		}
-		recordTypesPacket[i] = packetType
-	}
 
-	// Defines all DNS responses.
+	// Create the response map.
 	responses := map[string][]*DNSResponse{}
-	responsesLock := sync.Mutex{}
-	appendToRecordType := func(recordType string, responseArgs ...*DNSResponse) {
-		responsesLock.Lock()
-		defer responsesLock.Unlock()
 
-		// Stops an append with zero items being nil.
-		a := responses[recordType]
-		if a == nil {
-			a = []*DNSResponse{}
+	// Defines the mutex for the responses.
+	responsesLock := sync.Mutex{}
+
+	// Turn the hostname into chunks.
+	chunks := chunkifyHost(hostname)
+
+	// Create the cacher.
+	cacher := &inMemoryCacher{cache: map[uint16]map[string]*godns.Msg{}}
+
+	// Handle non-recursive lookups.
+	if !recursive {
+		// Find the name server.
+		nameServer := dnsServer
+		if !cache {
+			var err error
+			nameServer, err = findNameserver(log, cacher, chunks, 0)
+			if err != nil {
+				return nil, err
+			}
 		}
 
-		responses[recordType] = append(a, responseArgs...)
-	}
-	eg := errgroup.Group{}
-	for i, recordLoop := range recordTypes {
-		// Get all items which may not be thread safe.
-		recordLoopName := recordLoop
-		packetType := recordTypesPacket[i]
+		// Create the error groups.
+		eg := errgroup.Group{}
 
-		// Do the DNS lookup.
-		eg.Go(func() error {
-			// Do the DNS lookup.
-			msg, err := godnsLookup(log, addr, packetType, strings.Join(chunks, ".")+".")
-			if err != nil {
-				return err
-			}
+		// Handle if the hostname doesn't end with a dot.
+		if !strings.HasSuffix(hostname, ".") {
+			hostname += "."
+		}
 
-			// Make each response.
-			dnsResponses := make([]*DNSResponse, 0)
-		answerIteration:
-			for _, v := range msg.Answer {
-				// Handle the various responses.
-				var data json.RawMessage
-				originalValue := v
-				resultDnsHost := dnsServer
-			parseAnswer:
-				switch x := v.(type) {
-				case *godns.CNAME:
-					if recordLoopName == "CNAME" {
-						// This is to be expected here since we are looking for CNAME records.
-						b, _ := json.Marshal(x.Target)
-						data = b
-					} else {
-						// In this situation, the DNS configuration is telling us to look elsewhere.
-						recursionCount := 0
-						for recursionCount < 50 {
-							// Chunkify the CNAME.
-							chunkifyReady := x.Target
-							if strings.HasSuffix(chunkifyReady, ".") {
-								chunkifyReady = strings.TrimRight(chunkifyReady, ".")
-							}
-							cnameChunks := strings.Split(chunkifyReady, ".")
-
-							// Get the NS host.
-							var nsHost, nsAddr string
-							if cache {
-								nsHost = dnsServer
-								nsAddr = addr
-							} else {
-								nsHost, _, _, err = findNameserverHostname(log, initAddr, cnameChunks)
-								if err != nil {
-									return err
-								}
-								if nsHost == "" {
-									// Unable to find NS record.
-									log.Warn("unable to find NS recordLoopName", zap.String("hostname", strings.Join(cnameChunks, ".")))
-									continue answerIteration
-								}
-
-								// Turn that into the address.
-								rawAddr, err := net.ResolveIPAddr("ip", nsHost)
-								if err != nil {
-									return err
-								}
-								nsAddr = rawAddr.IP.String() + ":53"
-							}
-
-							// Lookup the CNAME's value.
-							cnameLookupMsg, err := godnsLookup(log, nsAddr, packetType, x.Target)
-							if err != nil {
-								return err
-							}
-
-							// If there is no answers, continue the root loop.
-							if len(cnameLookupMsg.Answer) == 0 {
-								continue answerIteration
-							}
-
-							// Check if this contains non-CNAME records.
-							for _, iface := range cnameLookupMsg.Answer {
-								switch result := iface.(type) {
-								case *godns.CNAME:
-									// Ignore this.
-								default:
-									// We are past CNAME's!
-									v = result
-									resultDnsHost = nsHost
-									goto parseAnswer
-								}
-							}
-
-							// Set the next CNAME we are parsing.
-							x = cnameLookupMsg.Answer[0].(*godns.CNAME)
-
-							// Add 1 to the recursion count.
-							recursionCount++
-						}
-						return fmt.Errorf("recordLoopName type %s for host %s has hit recursion limit", recordLoopName, strings.Join(chunks, "."))
-					}
-				default:
-					// Get the data from the record.
-					// Due to the nature of the library, this is sadly a little magical.
-					reflectValue := reflect.Indirect(reflect.ValueOf(v))
-					reflectType := reflectValue.Type()
-					n := reflectType.NumField()
-					for i := 0; i < n; i++ {
-						f := reflectType.Field(i)
-						if strings.ToUpper(f.Name) == recordLoopName {
-							// This is the field we want.
-							var err error
-							data, err = json.Marshal(reflectValue.FieldByName(f.Name).Interface())
-							if err != nil {
-								return fmt.Errorf("failed to marshal json: %v", err)
-							}
-							break
-						}
-					}
-					if data == nil {
-						// In this situation, we will throw it into the JSON cleanifier.
-						var err error
-						data, err = json.Marshal(jsonCleanifier{
-							Value:      v,
-							RemoveKeys: []string{"Hdr"},
-						})
-						if err != nil {
-							return fmt.Errorf("failed to marshal json: %v", err)
-						}
-					}
-				}
-
-				// Handle the priority for MX records.
-				var preference *uint16
-				if mx, ok := v.(*godns.MX); ok {
-					preference = &mx.Preference
-				}
-
-				// Make the response.
-				h := originalValue.Header()
-				r := &DNSResponse{
-					Type:         recordLoopName,
-					TTL:          h.Ttl,
-					Name:         strings.TrimRight(h.Name, "."),
-					Value:        data,
-					Preference:   preference,
-					DNSServer:    strings.TrimRight(resultDnsHost, "."),
-					dnsStringify: v.String,
-				}
-				dnsResponses = append(dnsResponses, r)
-			}
-			appendToRecordType(recordLoopName, dnsResponses...)
-			return nil
-		})
-	}
-
-	// Handle any additional recursion.
-	mapChunks := []map[string][]*DNSResponse{}
-	if recursive {
-		mapChunks = make([]map[string][]*DNSResponse, len(chunks)-1)
-		for i = 1; i < len(chunks); i++ {
-			mapPtr := &mapChunks[i-1]
-			x := i
+		// Go through each record type and do the lookups.
+		for _, recordLoop := range recordTypes {
+			record := recordLoop
 			eg.Go(func() error {
-				remainderChunks := chunks[x:]
-				map_, err := doDnsLookups(log, oldDnsServer, recordType, cache, false, remainderChunks)
+				r, err := resolveDnsLookup(log, cacher, nameServer, record, hostname, cache)
 				if err != nil {
 					return err
 				}
-				*mapPtr = map_
+				responsesLock.Lock()
+				responses[record] = r
+				responsesLock.Unlock()
 				return nil
 			})
 		}
+
+		// Wait for the group to finish and then return the results.
+		if err := eg.Wait(); err != nil {
+			return nil, err
+		}
+		return responses, nil
 	}
 
-	// Go ahead and run the DNS lookups.
-	if err = eg.Wait(); err != nil {
-		return nil, err
-	}
+	// Reverse the chunks.
+	reversedChunks := reverseStringSlice(chunks)
 
-	// Add all the map keys found in the right order and later.
-	for _, map_ := range mapChunks {
-		for k, v := range map_ {
-			responses[k] = append(responses[k], v...)
+	// Go through each chunk part.
+	for i := 0; i < len(reversedChunks); i++ {
+		// Get the part of the chunks this is referring to.
+		chunkPart := reverseStringSlice(reversedChunks[:i+1])
+
+		// Get the first i items from the slice.
+		hostname = strings.Join(chunkPart, ".") + "."
+
+		// Find the nameserver.
+		nameServer, err := findNameserver(log, cacher, chunkPart, 0)
+		if err != nil {
+			return nil, err
+		}
+
+		// Create an error group.
+		eg := errgroup.Group{}
+
+		// Spawn a goroutine to look up each record type.
+		for _, recordLoop := range recordTypes {
+			record := recordLoop
+			eg.Go(func() error {
+				r, err := resolveDnsLookup(log, cacher, nameServer, record, hostname, cache)
+				if err != nil {
+					return err
+				}
+				responsesLock.Lock()
+				x := responses[record]
+				if x == nil {
+					x = []*DNSResponse{}
+				}
+				responses[record] = append(x, r...)
+				responsesLock.Unlock()
+				return nil
+			})
+		}
+
+		// Wait for the results.
+		if err := eg.Wait(); err != nil {
+			return nil, err
 		}
 	}
 
-	// Return all responses.
+	// Return the responses.
 	return responses, nil
 }
 
@@ -469,13 +574,7 @@ func dns(g *gin.RouterGroup, log *zap.Logger, dnsServer string) {
 		// Get the type and hostname from the URL.
 		recordType := context.Param("recordType")
 		hostname := strings.TrimSuffix(context.Param("hostname"), ".")
-		chunks := []string{}
-		for _, v := range strings.Split(hostname, ".") {
-			if v != "" {
-				chunks = append(chunks, v)
-			}
-		}
-		if len(chunks) == 0 {
+		if hostname == "" {
 			context.Error(&gin.Error{
 				Type: gin.ErrorTypePublic,
 				Err:  errors.New("invalid hostname"),
@@ -484,7 +583,7 @@ func dns(g *gin.RouterGroup, log *zap.Logger, dnsServer string) {
 		}
 
 		// Do the DNS lookup.
-		results, err := doDnsLookups(log, dnsServer, recordType, params.Cache, params.Trace, chunks)
+		results, err := doDnsLookups(log, dnsServer, recordType, hostname, params.Cache, params.Trace)
 		if err != nil {
 			context.Error(&gin.Error{
 				Type: gin.ErrorTypePublic,
