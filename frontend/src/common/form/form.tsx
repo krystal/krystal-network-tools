@@ -4,26 +4,39 @@ import { FORM_ERROR } from "final-form";
 import { formValidator } from "./form.helpers";
 
 import { FormComponent } from "./form.types";
+import { useEffect, useState } from "react";
 
 const Form: FormComponent = ({
   schema,
-  initialValues = {},
+  initialValues: initialVals,
   onSubmit,
   render,
   ...props
 }) => {
-  return (
-    <FinalForm
-      keepDirtyOnReinitialize
-      // Check if the initial values can be added from the URL search params
-      initialValues={Object.keys(initialValues).reduce((values, name) => {
+  const [initialValues, setInitialValues] = useState(initialVals || {});
+
+  // Check if the initial values can be added from the URL search params
+  // We only want this to run on mount
+  useEffect(() => {
+    setInitialValues(
+      Object.entries(initialValues).reduce((values, [name, val]) => {
         const params = new URLSearchParams(window.location.search);
+
         let param: string | boolean | null = params.get(name);
         if (param === "false") param = false;
         if (param === "true") param = true;
-        const value = param || (initialValues as any)[name];
+
+        const value = param || val;
+
         return { ...values, [name]: value };
-      }, {})}
+      }, {})
+    );
+  }, []); // eslint-disable-line
+
+  return (
+    <FinalForm
+      keepDirtyOnReinitialize
+      initialValues={initialValues}
       validate={formValidator(schema)}
       onSubmit={async (...args) => {
         try {
