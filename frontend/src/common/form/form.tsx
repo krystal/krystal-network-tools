@@ -26,7 +26,7 @@ const Form: FormComponent = ({
         if (param === "false") param = false;
         if (param === "true") param = true;
 
-        const value = param || val;
+        const value = param === null ? val : param;
 
         return { ...values, [name]: value };
       }, {})
