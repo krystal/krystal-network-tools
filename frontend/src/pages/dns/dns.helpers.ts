@@ -21,7 +21,7 @@ export const getDnsColor = (type: DnsType) => {
     case "TXT":
       return "teal";
     case "TRACE":
-      return "black";
+      return "brand";
     default:
       return "gray";
   }
