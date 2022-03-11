@@ -28,7 +28,7 @@ const Code: FC<CodeProps & BoxProps> = ({
   const copyToClipboard = useClipboard(textToCopy);
 
   return (
-    <Box display="inline-flex" maxW="100%">
+    <Box display="inline-flex" maxW="100%" textAlign="left">
       <Box
         as="pre"
         display="inline-block"
