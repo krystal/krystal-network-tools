@@ -238,7 +238,11 @@ func findAuthoritativeNameserver(log *zap.Logger, hostname string) (string, Reco
 
 		// Add discovered answers/NSes to the records for showing to user
 		for _, record := range append(msg.Answer, msg.Ns...) {
-			b, _ := json.Marshal(record)
+			b, err := json.Marshal(record)
+			if err != nil {
+				return "", err
+			}
+
 			header := record.Header()
 			server.Records = append(server.Records, Record{
 				Type:     godns.TypeToString[header.Rrtype],
