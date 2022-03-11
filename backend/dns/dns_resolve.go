@@ -252,19 +252,18 @@ func findAuthoritativeNameserver(log *zap.Logger, hostname string) (string, Reco
 
 		// Determine if we have further to traverse or if we've reached the end
 
-		if len(msg.Answer) > 0 {
-			authoritativeNameserver := msg.Answer[rand.Intn(len(msg.Answer))]
-
-			switch t := authoritativeNameserver.(type) {
-			case *godns.NS:
-				return strings.TrimRight(t.Ns, "."), nil
-			case *godns.CNAME:
-				return nameserver, nil
-			default:
-				return "", fmt.Errorf(
-					"unexpected godns type: %T", authoritativeNameserver,
-				)
+		// Filter out non-NS answers
+		nsAnswers := []*godns.NS{}
+		for _, answer := range msg.Answer {
+			v, ok := answer.(*godns.NS)
+			if ok {
+				nsAnswers = append(nsAnswers, v)
 			}
+		}
+
+		if len(nsAnswers) > 0 {
+			randomAnswer := nsAnswers[rand.Intn(len(nsAnswers))]
+			return strings.TrimRight(randomAnswer.Ns, "."), nil
 		}
 
 		if len(msg.Ns) == 0 {
