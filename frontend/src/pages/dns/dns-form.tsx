@@ -18,7 +18,7 @@ const DnsForm: FC<DnsFormProps> = ({ onSubmit, disabled }) => {
   return (
     <Form
       schema={dnsSchema}
-      initialValues={{ host: "", type: DnsType.ANY, trace: false, cache: false }}
+      initialValues={{ host: "", type: DnsType.ANY, trace: false }}
       onSubmit={onSubmit}
       render={(form) => (
         <Stack align="flex-end" spacing={3}>
@@ -46,7 +46,6 @@ const DnsForm: FC<DnsFormProps> = ({ onSubmit, disabled }) => {
           </FormSelectField>
 
           <FormSwitchField name="trace" label="Full trace?" />
-          <FormSwitchField name="cache" label="Use cache?" />
 
           <Button
             colorScheme="green"

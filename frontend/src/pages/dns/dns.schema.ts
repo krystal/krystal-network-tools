@@ -4,11 +4,13 @@ export enum DnsType {
   ANY = "ANY",
   A = "A",
   AAAA = "AAAA",
+  CNAME = "CNAME",
   MX = "MX",
   NS = "NS",
   PTR = "PTR",
   SOA = "SOA",
   SRV = "SRV",
+  TRACE = "TRACE",
   TXT = "TXT",
 }
 
@@ -20,7 +22,6 @@ const dnsSchema = z.object({
     })
     .min(1, "A hostname or IP address is required"),
   type: z.nativeEnum(DnsType),
-  cache: z.boolean(),
   trace: z.boolean(),
 });
 

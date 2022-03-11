@@ -6,6 +6,8 @@ export const getDnsColor = (type: DnsType) => {
       return "blue";
     case "AAAA":
       return "cyan";
+    case "CNAME":
+      return "orange";
     case "MX":
       return "pink";
     case "NS":
@@ -18,6 +20,8 @@ export const getDnsColor = (type: DnsType) => {
       return "yellow";
     case "TXT":
       return "teal";
+    case "TRACE":
+      return "brand";
     default:
       return "gray";
   }
