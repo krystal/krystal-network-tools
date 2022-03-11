@@ -145,6 +145,52 @@ func rawQuery(
 	return msg, err
 }
 
+func recordFromAnswer(answer godns.RR) (Record, error) {
+	header := answer.Header()
+
+	var value interface{}
+	switch casted := answer.(type) {
+	case *godns.A:
+		value = casted.A
+	case *godns.AAAA:
+		value = casted.AAAA
+	case *godns.CNAME:
+		value = casted.Target
+	case *godns.MX:
+		value = casted.Mx
+	case *godns.NS:
+		value = casted.Ns
+	case *godns.PTR:
+		value = casted.Ptr
+	case *godns.TXT:
+		value = casted.Txt
+	default:
+		value = casted
+	}
+	data, err := json.Marshal(jsonCleanifier{
+		Value:      value,
+		RemoveKeys: []string{"Hdr"},
+	})
+	if err != nil {
+		return Record{}, fmt.Errorf("failed to marshal json: %v", err)
+	}
+
+	record := Record{
+		Type:     godns.TypeToString[header.Rrtype],
+		TTL:      header.Ttl,
+		Name:     strings.TrimRight(header.Name, "."),
+		Value:    data,
+		stringer: answer.String,
+	}
+
+	// For MX records, extract priority.
+	if mx, ok := answer.(*godns.MX); ok {
+		record.Preference = &mx.Preference
+	}
+
+	return record, nil
+}
+
 func queryTypeFromNameserver(log *zap.Logger, nameserver, recordType, lookup string) ([]Record, error) {
 	// Do the main DNS lookup.
 	addr := nameserver + ":53"
@@ -162,54 +208,10 @@ func queryTypeFromNameserver(log *zap.Logger, nameserver, recordType, lookup str
 		answers = result.Ns
 	}
 	for _, answer := range answers {
-		header := answer.Header()
-
-		// Get the data from the record.
-		// Due to the nature of the library, this is sadly a little magical.
-		var data []byte
-		reflectValue := reflect.Indirect(reflect.ValueOf(answer))
-		reflectType := reflectValue.Type()
-		n := reflectType.NumField()
-		if cname, ok := answer.(*godns.CNAME); ok {
-			data, _ = json.Marshal(cname.Target)
-		} else {
-			for i := 0; i < n; i++ {
-				f := reflectType.Field(i)
-				if strings.ToUpper(f.Name) == recordType {
-					// This is the field we want.
-					var err error
-					data, err = json.Marshal(reflectValue.FieldByName(f.Name).Interface())
-					if err != nil {
-						return nil, fmt.Errorf("failed to marshal json: %v", err)
-					}
-					break
-				}
-			}
+		record, err := recordFromAnswer(answer)
+		if err != nil {
+			return nil, err
 		}
-		if data == nil {
-			// In this situation, we will throw it into the JSON cleanifier.
-			data, err = json.Marshal(jsonCleanifier{
-				Value:      answer,
-				RemoveKeys: []string{"Hdr"},
-			})
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal json: %v", err)
-			}
-		}
-
-		record := Record{
-			Type:     godns.TypeToString[header.Rrtype],
-			TTL:      header.Ttl,
-			Name:     strings.TrimRight(lookup, "."),
-			Value:    data,
-			stringer: answer.String,
-		}
-
-		// For MX records, extract priority.
-		if mx, ok := answer.(*godns.MX); ok {
-			record.Preference = &mx.Preference
-		}
-
 		records = append(records, record)
 	}
 
@@ -237,20 +239,13 @@ func findAuthoritativeNameserver(log *zap.Logger, hostname string) (string, Reco
 		}
 
 		// Add discovered answers/NSes to the records for showing to user
-		for _, record := range append(msg.Answer, msg.Ns...) {
-			b, err := json.Marshal(record)
+		for _, answer := range append(msg.Answer, msg.Ns...) {
+			record, err := recordFromAnswer(answer)
 			if err != nil {
 				return "", err
 			}
 
-			header := record.Header()
-			server.Records = append(server.Records, Record{
-				Type:     godns.TypeToString[header.Rrtype],
-				Name:     strings.TrimRight(header.Name, "."),
-				Value:    b,
-				TTL:      record.Header().Ttl,
-				stringer: record.String,
-			})
+			server.Records = append(server.Records, record)
 		}
 
 		resp = append(resp, server)
@@ -312,7 +307,7 @@ func traceQuery(log *zap.Logger, dnsServer, recordType, hostname string) (Respon
 	recordTypes := []string{strings.ToUpper(recordType)}
 	if recordType == "ANY" {
 		// Not many DNS resolvers support this anymore, set it to literally all record types.
-		recordTypes = []string{"A", "AAAA", "CNAME", "MX", "PTR", "SOA", "TXT", "NS"}
+		recordTypes = []string{"A", "AAAA", "CNAME", "MX", "PTR", "SOA", "TXT"}
 	} else if recordTypes[0] == "NS" {
 		// We already have this data. Make this a blank slice.
 		recordTypes = []string{}
