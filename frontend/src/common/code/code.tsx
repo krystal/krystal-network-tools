@@ -63,9 +63,9 @@ const Code: FC<CodeProps & BoxProps> = ({
                 size="xs"
                 fontFamily="sans-serif"
                 onClick={copyToClipboard}
-                icon={<Icon h={3} w={3} color="white" as={FaClipboard} />}
+                icon={<Icon h={2} w={2} color="white" as={FaClipboard} />}
                 aria-label="copy"
-                h={5}
+                h={4}
               />
             </Tooltip>
           </DarkMode>

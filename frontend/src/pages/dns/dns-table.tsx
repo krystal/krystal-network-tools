@@ -30,10 +30,11 @@ type DnsTableProps = {
   record: DnsResponse[DnsType];
 };
 
-const showPriority = (record: DnsResponse[DnsType]) =>
-  !!record.find((item) => typeof item.priority !== "undefined");
+type DnsTableHeadProps = DnsTableProps & {
+  showPriority: boolean;
+};
 
-const DnsTableHead: FC<DnsTableProps> = ({ record }) => {
+const DnsTableHead: FC<DnsTableHeadProps> = ({ record, showPriority }) => {
   const headBg = useColorModeValue("gray.100", "gray.600");
 
   return (
@@ -43,7 +44,7 @@ const DnsTableHead: FC<DnsTableProps> = ({ record }) => {
           Type
         </Th>
 
-        <Th p={3} border="none" bg={headBg}>
+        <Th p={3} border="none" bg={headBg} colSpan={2}>
           Name
         </Th>
 
@@ -51,7 +52,7 @@ const DnsTableHead: FC<DnsTableProps> = ({ record }) => {
           TTL
         </Th>
 
-        {showPriority(record) && (
+        {showPriority && (
           <Th p={3} border="none" bg={headBg}>
             Priority
           </Th>
@@ -74,10 +75,11 @@ const DnsTableHead: FC<DnsTableProps> = ({ record }) => {
 };
 
 type DnsTableRowProps = {
-  row: DnsResponse[DnsType][number];
+  row: DnsResponse[DnsType][number]["records"][number];
+  showPriority: boolean;
 };
 
-const DnsTableRow: FC<DnsTableRowProps> = ({ row }) => {
+const DnsTableRow: FC<DnsTableRowProps> = ({ row, showPriority }) => {
   const arrowColor = useColorModeValue("gray.200", "gray.900");
 
   return (
@@ -88,15 +90,13 @@ const DnsTableRow: FC<DnsTableRowProps> = ({ row }) => {
         </Tag>
       </Td>
 
-      <Td border="none" isTruncated>
+      <Td border="none" isTruncated colSpan={2}>
         {row.name}
       </Td>
 
       <Td border="none">{row.ttl}</Td>
 
-      {typeof row.priority !== "undefined" && (
-        <Td border="none">{row.priority}</Td>
-      )}
+      {showPriority && <Td border="none">{row.priority || ""}</Td>}
 
       {typeof row.value === "string" && (
         <Td border="none" colSpan={2} height="32px" textAlign="right">
@@ -132,31 +132,24 @@ const DnsTableRow: FC<DnsTableRowProps> = ({ row }) => {
 const DnsTable: FC<DnsTableProps> = ({ record }) => {
   const labelBg = useColorModeValue("gray.50", "gray.600");
 
-  const groupedRecords = useMemo(() => {
-    return record.reduce((groups, row) => {
-      const previous = groups[row.dnsServer] || [];
-
-      return {
-        ...groups,
-        [row.dnsServer]: [...previous, row],
-      };
-    }, {} as { [k: string]: DnsResponse[DnsType] });
-  }, [record]);
+  const showPriority = useMemo(
+    () =>
+      !!record.find(
+        (item) =>
+          !!item.records.find((rec) => typeof rec.priority !== "undefined")
+      ),
+    [record]
+  );
 
   return (
     <Table variant="simple" w="100%" size="sm" minW="580px">
-      <DnsTableHead record={record} />
+      <DnsTableHead record={record} showPriority={showPriority} />
 
       <Tbody>
-        {Object.keys(groupedRecords).map((dnsServer) => (
+        {record.map(({ server, records }) => (
           <>
             <Tr>
-              <Td
-                colspan={showPriority(record) ? 6 : 5}
-                py={1}
-                px={0}
-                border="none"
-              >
+              <Td colspan={showPriority ? 7 : 6} py={1} px={0} border="none">
                 <Box
                   py={3}
                   px={5}
@@ -166,14 +159,14 @@ const DnsTable: FC<DnsTableProps> = ({ record }) => {
                   borderRadius="md"
                 >
                   <Text fontFamily="monospace" fontWeight="bold">
-                    {dnsServer}
+                    {server}
                   </Text>
                 </Box>
               </Td>
             </Tr>
 
-            {groupedRecords[dnsServer].map((row, index) => (
-              <DnsTableRow key={index} row={row} />
+            {records.map((row, index) => (
+              <DnsTableRow key={index} row={row} showPriority={showPriority} />
             ))}
           </>
         ))}

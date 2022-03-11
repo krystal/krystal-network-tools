@@ -27,7 +27,7 @@ type DnsRecord = {
         retry: number;
         serial: number;
       };
-}
+};
 
 export type DnsResponse = {
   [key in DnsType]: {
@@ -80,11 +80,7 @@ const Dns: FC = () => {
                   </Tag>
                 </Box>
                 <Card overflowX="auto">
-                  {record.length > 0 ? (
-                    <DnsTable record={record} />
-                  ) : (
-                    <Text color="gray.500">There are no {type} records.</Text>
-                  )}
+                  <DnsTable record={record} />
                 </Card>
               </Fragment>
             );
