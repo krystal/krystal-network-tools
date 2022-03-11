@@ -2,7 +2,9 @@ package dns
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math/rand"
 	"reflect"
 	"strings"
 	"sync"
@@ -143,7 +145,7 @@ func rawQuery(
 	return msg, err
 }
 
-func resolveDnsLookup(log *zap.Logger, nameserver, recordType, lookup string) (RecordType, error) {
+func queryTypeFromNameserver(log *zap.Logger, nameserver, recordType, lookup string) ([]Record, error) {
 	// Do the main DNS lookup.
 	addr := nameserver + ":53"
 	result, err := rawQuery(log, addr, godns.StringToType[recordType], lookup)
@@ -152,10 +154,7 @@ func resolveDnsLookup(log *zap.Logger, nameserver, recordType, lookup string) (R
 		return nil, err
 	}
 
-	serverResponse := Server{
-		Server:  addr,
-		Records: []Record{},
-	}
+	records := []Record{}
 
 	// Go through each answer and check if we need to do any traversals.
 	answers := result.Answer
@@ -211,38 +210,48 @@ func resolveDnsLookup(log *zap.Logger, nameserver, recordType, lookup string) (R
 			record.Preference = &mx.Preference
 		}
 
-		serverResponse.Records = append(serverResponse.Records, record)
+		records = append(records, record)
 	}
 
-	return RecordType{serverResponse}, nil
+	return records, nil
 }
 
-/* func findAuthoritativeNameserver(log *zap.Logger, hostname string) (string, []*DNSResponse, error) {
+func findAuthoritativeNameserver(log *zap.Logger, hostname string) (string, RecordType, error) {
 	// Select a root nameserver to begin our search
-	rootNameserver := dnsTools.NextRootServer()
+	rootNameserver := NextRootServer()
 
-	resp := []*DNSResponse{}
+	resp := RecordType{}
 	var recursiveSearch func(iteration int, nameserver string) (string, error)
 	recursiveSearch = func(iteration int, nameserver string) (string, error) {
-		msg, err := makeDNSRequest(log, nameserver+":53", godns.TypeNS, hostname)
+		if iteration > 10 {
+			return "", errors.New("nameserver search depth exceeded")
+		}
+		msg, err := rawQuery(log, nameserver+":53", godns.TypeNS, hostname)
 		if err != nil {
 			return "", err
 		}
 
-		for _, answer := range append(msg.Answer, msg.Ns...) {
-			switch t := answer.(type) {
-			case *godns.NS:
-				b, _ := json.Marshal(t.Ns)
-				resp = append(resp, &DNSResponse{
-					DNSServer: nameserver,
-					Type:      "NS",
-					Name:      strings.TrimRight(t.Header().Name, "."),
-					Value:     b,
-					TTL:       answer.Header().Ttl,
-					String:    t.String,
-				})
-			}
+		server := Server{
+			Server:  nameserver,
+			Records: []Record{},
 		}
+
+		// Add discovered answers/NSes to the records for showing to user
+		for _, record := range append(msg.Answer, msg.Ns...) {
+			b, _ := json.Marshal(record)
+			header := record.Header()
+			server.Records = append(server.Records, Record{
+				Type:     godns.TypeToString[header.Rrtype],
+				Name:     strings.TrimRight(header.Name, "."),
+				Value:    b,
+				TTL:      record.Header().Ttl,
+				stringer: record.String,
+			})
+		}
+
+		resp = append(resp, server)
+
+		// Determine if we have further to traverse or if we've reached the end
 
 		if len(msg.Answer) > 0 {
 			authoritativeNameserver := msg.Answer[rand.Intn(len(msg.Answer))]
@@ -273,7 +282,6 @@ func resolveDnsLookup(log *zap.Logger, nameserver, recordType, lookup string) (R
 		}
 
 		iteration += 1
-
 		return recursiveSearch(iteration, nameserverRecord.Ns)
 	}
 
@@ -284,19 +292,17 @@ func resolveDnsLookup(log *zap.Logger, nameserver, recordType, lookup string) (R
 
 	return authoritativeNameserver, resp, nil
 }
-*/
-/*
-func dnsTrace(log *zap.Logger, dnsServer, recordType, hostname string) (DNSResponse, error) {
+
+func traceQuery(log *zap.Logger, dnsServer, recordType, hostname string) (Response, error) {
 	// Create the response map.
-	responses := DNSResponse{}
-	responsesLock := sync.Mutex{}
+	responses := Response{}
 
 	authoritativeNameserver, answer, err := findAuthoritativeNameserver(log, hostname)
 	if err != nil {
 		return nil, err
 	}
 
-	responses["NS"] = answer
+	answerLock := sync.Mutex{}
 
 	// Get the record types.
 	recordTypes := []string{strings.ToUpper(recordType)}
@@ -313,17 +319,17 @@ func dnsTrace(log *zap.Logger, dnsServer, recordType, hostname string) (DNSRespo
 	for _, recordLoop := range recordTypes {
 		record := recordLoop
 		eg.Go(func() error {
-			r, err := resolveDnsLookup(log, authoritativeNameserver, record, hostname)
+			records, err := queryTypeFromNameserver(log, authoritativeNameserver, record, hostname)
 			if err != nil {
 				return err
 			}
-			responsesLock.Lock()
-			x := responses[record]
-			if x == nil {
-				x = []*DNSResponse{}
-			}
-			responses[record] = append(x, r...)
-			responsesLock.Unlock()
+			answerLock.Lock()
+			answer[len(answer)-1].Records = append(
+				answer[len(answer)-1].Records,
+				records...,
+			)
+
+			answerLock.Unlock()
 			return nil
 		})
 	}
@@ -333,8 +339,10 @@ func dnsTrace(log *zap.Logger, dnsServer, recordType, hostname string) (DNSRespo
 		return nil, err
 	}
 
-	return nil, nil
-}*/
+	responses["TRACE"] = answer
+
+	return responses, nil
+}
 
 func recursiveQuery(log *zap.Logger, dnsServer, recordType, hostname string) (Response, error) {
 	// Create the response map.
@@ -355,12 +363,17 @@ func recursiveQuery(log *zap.Logger, dnsServer, recordType, hostname string) (Re
 	for _, recordLoop := range recordTypes {
 		record := recordLoop
 		eg.Go(func() error {
-			r, err := resolveDnsLookup(log, dnsServer, record, hostname)
+			records, err := queryTypeFromNameserver(log, dnsServer, record, hostname)
 			if err != nil {
 				return err
 			}
 			responsesLock.Lock()
-			responses[record] = r
+			responses[record] = RecordType{
+				Server{
+					Server:  dnsServer,
+					Records: records,
+				},
+			}
 			responsesLock.Unlock()
 			return nil
 		})
@@ -380,8 +393,7 @@ func Lookup(log *zap.Logger, dnsServer, recordType, hostname string, fullTrace b
 	}
 
 	if fullTrace {
-		return Response{}, nil
-		// return dnsTrace(log, dnsServer, recordType, hostname)
+		return traceQuery(log, dnsServer, recordType, hostname)
 	}
 
 	return recursiveQuery(log, dnsServer, recordType, hostname)
