@@ -228,6 +228,8 @@ func findAuthoritativeNameserver(log *zap.Logger, hostname string) (string, Reco
 		if iteration > 10 {
 			return "", errors.New("nameserver search depth exceeded")
 		}
+		iteration += 1
+
 		msg, err := rawQuery(log, nameserver+":53", godns.TypeNS, hostname)
 		if err != nil {
 			return "", err
@@ -239,7 +241,7 @@ func findAuthoritativeNameserver(log *zap.Logger, hostname string) (string, Reco
 		}
 
 		// Add discovered answers/NSes to the records for showing to user
-		for _, answer := range append(msg.Answer, msg.Ns...) {
+		for _, answer := range append(msg.Ns, msg.Answer...) {
 			record, err := recordFromAnswer(answer)
 			if err != nil {
 				return "", err
@@ -251,28 +253,42 @@ func findAuthoritativeNameserver(log *zap.Logger, hostname string) (string, Reco
 		resp = append(resp, server)
 
 		// Determine if we have further to traverse or if we've reached the end
-
-		if len(msg.Answer) > 0 {
-			authoritativeNameserver := msg.Answer[rand.Intn(len(msg.Answer))]
-
-			switch t := authoritativeNameserver.(type) {
-			case *godns.NS:
-				return strings.TrimRight(t.Ns, "."), nil
-			case *godns.CNAME:
-				return nameserver, nil
-			default:
-				return "", fmt.Errorf(
-					"unexpected godns type: %T", authoritativeNameserver,
-				)
+		nsAnswers := []*godns.NS{}
+		for _, answer := range msg.Answer {
+			v, ok := answer.(*godns.NS)
+			if ok {
+				nsAnswers = append(nsAnswers, v)
+			}
+		}
+		var cnameAnswer *godns.CNAME
+		for _, answer := range msg.Answer {
+			v, ok := answer.(*godns.CNAME)
+			if ok {
+				cnameAnswer = v
+				break
 			}
 		}
 
+		// If theres any answers of the NS type, we have found our authoritative
+		// nameserver.
+		if len(nsAnswers) > 0 {
+			randomAnswer := nsAnswers[rand.Intn(len(nsAnswers))]
+			return strings.TrimRight(randomAnswer.Ns, "."), nil
+		}
+
+		// If there's no NS type answers, but a cname answer, it means the user
+		// has queried a cname. This is a weird behaviour.
+		if cnameAnswer != nil {
+			return "", nil
+		}
+
 		if len(msg.Ns) == 0 {
-			// If it doesn't return a answer, or somewhere we can go for an answer
-			// we are effectively lost !
+			// No answer, and no NS to follow. We've come to a dead end.
 			return "", errors.New("no answer or authoritive server provided in dns response")
 		}
 
+		// We need to follow the nameservers deeper. Select a random one and
+		// perform the search on that one now.
 		nextNameserver := msg.Ns[rand.Intn(len(msg.Ns))]
 
 		nameserverRecord, ok := nextNameserver.(*godns.NS)
@@ -280,7 +296,6 @@ func findAuthoritativeNameserver(log *zap.Logger, hostname string) (string, Reco
 			return "", fmt.Errorf("unexpected record returned: %T", nextNameserver)
 		}
 
-		iteration += 1
 		return recursiveSearch(iteration, nameserverRecord.Ns)
 	}
 
@@ -293,15 +308,18 @@ func findAuthoritativeNameserver(log *zap.Logger, hostname string) (string, Reco
 }
 
 func traceQuery(log *zap.Logger, dnsServer, recordType, hostname string) (Response, error) {
-	// Create the response map.
-	responses := Response{}
-
 	authoritativeNameserver, answer, err := findAuthoritativeNameserver(log, hostname)
 	if err != nil {
 		return nil, err
 	}
 
-	answerLock := sync.Mutex{}
+	// When tracing on a cname, we pick it up during the auth nameserver search
+	// and aren't provided a authoritative nameserver to continue to.
+	if authoritativeNameserver == "" {
+		return Response{
+			"TRACE": answer,
+		}, nil
+	}
 
 	// Get the record types.
 	recordTypes := []string{strings.ToUpper(recordType)}
@@ -314,6 +332,7 @@ func traceQuery(log *zap.Logger, dnsServer, recordType, hostname string) (Respon
 	}
 
 	eg := errgroup.Group{}
+	answerLock := sync.Mutex{}
 	// Spawn a goroutine to look up each record type.
 	for _, recordLoop := range recordTypes {
 		record := recordLoop
@@ -338,9 +357,9 @@ func traceQuery(log *zap.Logger, dnsServer, recordType, hostname string) (Respon
 		return nil, err
 	}
 
-	responses["TRACE"] = answer
-
-	return responses, nil
+	return Response{
+		"TRACE": answer,
+	}, nil
 }
 
 func recursiveQuery(log *zap.Logger, dnsServer, recordType, hostname string) (Response, error) {
