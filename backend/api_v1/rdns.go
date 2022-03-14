@@ -54,8 +54,9 @@ func rdns(g group, log *zap.Logger, dnsServer string) {
 			return
 		}
 
+		ipAddr := net.ParseIP(ip)
 		result, err := dnsLib.LookupRDNS(
-			log, ip, dnsServer,
+			log, ipAddr, dnsServer,
 		)
 		if err != nil {
 			ctx.Error(&gin.Error{

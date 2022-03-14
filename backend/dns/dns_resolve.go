@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"net"
 	"reflect"
 	"strings"
 	"sync"
@@ -427,16 +428,20 @@ func Lookup(log *zap.Logger, dnsServer, recordType, hostname string, fullTrace b
 	return recursiveQuery(log, dnsServer, recordType, hostname)
 }
 
-func reverseString(s string) string {
-	chars := []rune(s)
-	for i, j := 0, len(chars)-1; i < j; i, j = i+1, j-1 {
-		chars[i], chars[j] = chars[j], chars[i]
+func reverseIP(ip net.IP) string {
+	addressParts := strings.Split(ip.String(), ".")
+	reversed := []string{}
+
+	for i := len(addressParts) - 1; i >= 0; i-- {
+		octet := addressParts[i]
+		reversed = append(reversed, octet)
 	}
-	return string(chars)
+
+	return strings.Join(reversed, ".")
 }
 
-func LookupRDNS(log *zap.Logger, ip, dnsServer string) (RecordType, error) {
-	hostname := reverseString(ip) + ".in-addr.arpa."
+func LookupRDNS(log *zap.Logger, ip net.IP, dnsServer string) (RecordType, error) {
+	hostname := reverseIP(ip) + ".in-addr.arpa."
 	resp, err := traceQuery(log, dnsServer, "PTR", hostname)
 	if err != nil {
 		return nil, err
