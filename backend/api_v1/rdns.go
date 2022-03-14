@@ -16,8 +16,6 @@ type rdnsParams struct {
 
 func rdns(g group, log *zap.Logger, dnsServer string) {
 	g.GET("/:ip", func(ctx *gin.Context) {
-		ip := ctx.Param("ip")
-
 		isJson := ctx.ContentType() == "application/json"
 		var params rdnsParams
 		if err := ctx.BindQuery(&params); err != nil {
@@ -27,6 +25,19 @@ func rdns(g group, log *zap.Logger, dnsServer string) {
 				})
 			} else {
 				ctx.String(400, "unable to parse query params: %s", err.Error())
+			}
+			return
+		}
+
+		ip := ctx.Param("ip")
+		ipAddr := net.ParseIP(ip)
+		if ipAddr == nil {
+			if ctx.ContentType() == "application/json" {
+				ctx.JSON(400, map[string]string{
+					"message": "Provided IP is not valid",
+				})
+			} else {
+				ctx.String(400, "Provided IP is not valid")
 			}
 			return
 		}
@@ -54,7 +65,6 @@ func rdns(g group, log *zap.Logger, dnsServer string) {
 			return
 		}
 
-		ipAddr := net.ParseIP(ip)
 		result, err := dnsLib.LookupRDNS(
 			log, ipAddr, dnsServer,
 		)
