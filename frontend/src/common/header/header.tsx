@@ -48,7 +48,7 @@ const Header: FC = () => {
     >
       <HeaderDrawer isOpen={menuIsOpen} onClose={() => setMenuIsOpen(false)} />
 
-      <Container maxW="container.lg">
+      <Container maxW="container.xl">
         <Grid templateColumns={{ base: "1fr 1fr" }} alignItems="center" gap={3}>
           <GridItem>
             <HStack spacing={3}>
