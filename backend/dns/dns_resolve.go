@@ -60,13 +60,23 @@ outerFor:
 type Response map[string]RecordType
 
 func (r Response) String() string {
-	return "TODO"
+	str := ""
+	for t, record := range r {
+		str += "--- " + t + " ---\n" + record.String()
+	}
+
+	return str
 }
 
 type RecordType []Server
 
 func (rt RecordType) String() string {
-	return "TODO"
+	str := ""
+	for _, srv := range rt {
+		str += srv.String() + "\n"
+	}
+
+	return str
 }
 
 type Server struct {
@@ -75,10 +85,10 @@ type Server struct {
 }
 
 func (srv Server) String() string {
-	str := srv.Server + ": \n"
+	str := "-- " + srv.Server + " --\n"
 	for _, record := range srv.Records {
 		if record.stringer != nil {
-			str += record.stringer()
+			str += record.stringer() + "\n"
 		}
 	}
 
@@ -289,14 +299,14 @@ func findAuthoritativeNameserver(log *zap.Logger, hostname string) (string, Reco
 
 		// We need to follow the nameservers deeper. Select a random one and
 		// perform the search on that one now.
-		nextNameserver := msg.Ns[rand.Intn(len(msg.Ns))]
-
-		nameserverRecord, ok := nextNameserver.(*godns.NS)
-		if !ok {
-			return "", fmt.Errorf("unexpected record returned: %T", nextNameserver)
+		switch v := msg.Ns[rand.Intn(len(msg.Ns))].(type) {
+		case *godns.NS:
+			return recursiveSearch(iteration, v.Ns)
+		case *godns.SOA:
+			return v.Ns, nil
+		default:
+			return "", fmt.Errorf("unexpected record returned: %T", v)
 		}
-
-		return recursiveSearch(iteration, nameserverRecord.Ns)
 	}
 
 	authoritativeNameserver, err := recursiveSearch(0, rootNameserver)
@@ -415,4 +425,22 @@ func Lookup(log *zap.Logger, dnsServer, recordType, hostname string, fullTrace b
 	}
 
 	return recursiveQuery(log, dnsServer, recordType, hostname)
+}
+
+func reverseString(s string) string {
+	chars := []rune(s)
+	for i, j := 0, len(chars)-1; i < j; i, j = i+1, j-1 {
+		chars[i], chars[j] = chars[j], chars[i]
+	}
+	return string(chars)
+}
+
+func LookupRDNS(log *zap.Logger, ip, dnsServer string) (RecordType, error) {
+	hostname := reverseString(ip) + ".in-addr.arpa."
+	resp, err := traceQuery(log, dnsServer, "PTR", hostname)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp["TRACE"], nil
 }
