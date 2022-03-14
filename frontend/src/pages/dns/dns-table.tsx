@@ -1,4 +1,4 @@
-import { FC, useMemo } from "react";
+import { FC, Fragment, useMemo } from "react";
 
 import {
   Button,
@@ -147,9 +147,9 @@ const DnsTable: FC<DnsTableProps> = ({ record }) => {
 
       <Tbody>
         {record.map(({ server, records }) => (
-          <>
+          <Fragment key={server}>
             <Tr>
-              <Td colspan={showPriority ? 7 : 6} py={1} px={0} border="none">
+              <Td colSpan={showPriority ? 7 : 6} py={1} px={0} border="none">
                 <Box
                   py={3}
                   px={5}
@@ -168,7 +168,7 @@ const DnsTable: FC<DnsTableProps> = ({ record }) => {
             {records.map((row, index) => (
               <DnsTableRow key={index} row={row} showPriority={showPriority} />
             ))}
-          </>
+          </Fragment>
         ))}
       </Tbody>
     </Table>

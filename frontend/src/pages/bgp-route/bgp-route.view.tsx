@@ -47,33 +47,33 @@ const BgpRoute: FC = () => {
               <Table size="sm">
                 <Tr>
                   <Th>Next hop</Th>
-                  <Td colspan={2}>
+                  <Td colSpan={2}>
                     <Code>{item.next_hop}</Code>
                   </Td>
                 </Tr>
                 <Tr>
                   <Th>As path</Th>
-                  <Td colspan={2}>
+                  <Td colSpan={2}>
                     <Code>{item.as_path?.join(", ")}</Code>
                   </Td>
                 </Tr>
                 <Tr>
                   <Th>Community</Th>
-                  <Td colspan={2}>
+                  <Td colSpan={2}>
                     <Code>{item.community?.join(" - ")}</Code>
                   </Td>
                 </Tr>
                 {!!item.large_community && (
                   <Tr>
                     <Th>Large community</Th>
-                    <Td colspan={2}>
+                    <Td colSpan={2}>
                       <Code>{item.large_community?.join(" - ")}</Code>
                     </Td>
                   </Tr>
                 )}
                 <Tr>
                   <Th>Local pref</Th>
-                  <Td colspan={2}>
+                  <Td colSpan={2}>
                     <Code>{item.local_pref}</Code>
                   </Td>
                 </Tr>

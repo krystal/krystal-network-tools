@@ -8,7 +8,7 @@ import {
   Tooltip,
 } from "@chakra-ui/react";
 import { FC } from "react";
-import { FaClipboard } from "react-icons/fa";
+import { IoCopy } from "react-icons/io5";
 import { useClipboard } from "../../hooks/use-clipboard";
 
 type CodeProps = {
@@ -63,7 +63,7 @@ const Code: FC<CodeProps & BoxProps> = ({
                 size="xs"
                 fontFamily="sans-serif"
                 onClick={copyToClipboard}
-                icon={<Icon h={2} w={2} color="white" as={FaClipboard} />}
+                icon={<Icon h={3} w={3} color="white" as={IoCopy} />}
                 aria-label="copy"
                 h={4}
               />

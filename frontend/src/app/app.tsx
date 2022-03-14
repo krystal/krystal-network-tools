@@ -25,7 +25,7 @@ const App: FC = () => {
       <ChakraProvider theme={appTheme}>
         <Header />
 
-        <Container maxW="container.lg" py={{ base: 6, md: 8 }}>
+        <Container maxW="container.xl" py={{ base: 6, md: 8 }}>
           <Grid
             templateColumns={{
               base: "1fr",
