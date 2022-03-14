@@ -1,15 +1,18 @@
-import { FC, useState } from "react";
+import { FC, Fragment, useState } from "react";
 
-import { Heading, Stack } from "@chakra-ui/react";
+import { Box, Heading, Stack, Tag } from "@chakra-ui/react";
 import Card from "../../common/card/card";
 import ReverseDnsForm from "./reverse-dns-form";
 import request from "../../api/request";
 import endpoint from "../../api/endpoint";
 import Code from "../../common/code/code";
+import { DnsType } from "../dns/dns.schema";
+import { DnsResponse } from "../dns/dns.view";
+import DnsTable from "../dns/dns-table";
 
-type ReverseDnsResponse = {
-  hostname: string;
-};
+type ReverseDnsResponse =
+  | { trace: DnsResponse[DnsType] }
+  | { hostname: string };
 
 const ReverseDns: FC = () => {
   const [ip, setIp] = useState("");
@@ -33,14 +36,23 @@ const ReverseDns: FC = () => {
       </Card>
 
       {result !== null && (
-        <Card>
-          <Heading size="sm" mb={4}>
-            {ip}
-          </Heading>
-          <Code fontSize="lg" w="100%">
-            {result.hostname}
-          </Code>
-        </Card>
+        <Fragment>
+          <Box>
+            <Tag colorScheme="brand" size="lg">
+              {ip}
+            </Tag>
+          </Box>
+
+          {"trace" in result ? (
+            <Card overflowX="auto">
+              <DnsTable record={result.trace} />
+            </Card>
+          ) : (
+            <Card>
+              <Code fontSize="lg">{result.hostname}</Code>
+            </Card>
+          )}
+        </Fragment>
       )}
     </Stack>
   );
