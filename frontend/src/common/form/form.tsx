@@ -71,13 +71,13 @@ const Form: FormComponent = ({
               values.toString()
           );
         } catch (err) {
-          console.log({ err });
-          return {
-            [FORM_ERROR]:
-              err instanceof Error
-                ? err.message
-                : "There was a problem submitting the form. Please check and try again.",
-          };
+            // @TODO: Handle errors from the server
+          // return {
+          //   [FORM_ERROR]:
+          //     err instanceof Error
+          //       ? err.message
+          //       : "There was a problem submitting the form. Please check and try again.",
+          // };
         }
       }}
       render={(form) => {
