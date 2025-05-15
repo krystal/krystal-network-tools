@@ -1,27 +1,28 @@
-package main
+package frontend
 
 import (
+	"embed"
 	_ "embed"
 	"encoding/json"
 	"errors"
 	"html/template"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
 
-type FrontendRouteInfo struct {
+type RouteInfo struct {
 	// EmbedTitle is used to generate the title information.
 	EmbedTitle func(*gin.Context) string
 }
 
-var routes = map[string]FrontendRouteInfo{
+var routes = map[string]RouteInfo{
 	"/": {
 		EmbedTitle: func(c *gin.Context) string { return "Home" },
 	},
@@ -106,44 +107,54 @@ type region struct {
 	URL NonBlankString `json:"url" yaml:"url"`
 }
 
-//go:embed template.html
-var templateHTMLString string
-
 type assetManifestPartial struct {
 	Files map[string]string `json:"files"`
 }
 
-func errorFrontend(r *gin.Engine, logger *zap.Logger, err error, message string) {
-	f := []zap.Field{}
-	if err != nil {
-		f = append(f, zap.Error(err))
-	}
-	logger.Error(message+" - frontend will not be rendered", f...)
+func errorFrontend(r gin.IRouter, err error, message string) {
 	for k := range routes {
 		r.GET(k, func(c *gin.Context) {
+			slog.With("service", "frontend", "message", message).Error("failed to load frontend", "err", err.Error())
 			c.String(http.StatusInternalServerError,
 				"failed to load frontend - please check console for details")
 		})
 	}
 }
 
-func initFrontend(r *gin.Engine, f fs.FS, logger *zap.Logger) {
-	// Initialize the template.
-	tpl := template.Must(template.New("template").Parse(templateHTMLString))
+var (
+	//go:embed frontend_blobs/*
+	blobs embed.FS
+	//go:embed template.html
+	templateHTMLString string
+)
 
-	// Look for asset-manifest.json and load it.
-	file, err := f.Open("asset-manifest.json")
+func InitFrontend(r gin.IRouter) {
+	// Parse the template HTML.
+	tpl := template.Must(template.New("template").Parse(templateHTMLString))
+	f, err := fs.Sub(blobs, "frontend_blobs")
 	if err != nil {
-		errorFrontend(r, logger, err, "failed to open asset-manifest.json")
+		errorFrontend(r, err, "failed to open frontend blobs")
 		return
 	}
+
+	// Find the asset-manifest.json file on the filesystem.
+	file, err := f.Open("asset-manifest.json")
+	if err != nil {
+		errorFrontend(r, err, "failed to open asset-manifest.json")
+		return
+	}
+
+	// Read the asset-manifest.json file.
 	b, err := io.ReadAll(file)
 	if err != nil {
-		panic(err)
+		errorFrontend(r, err, "error reading asset-manifest.json")
+		return
 	}
+
+	// Attempt to unmarshal the JSON manifest file.
 	var assetsPartial assetManifestPartial
-	if err := json.Unmarshal(b, &assetsPartial); err != nil {
-		errorFrontend(r, logger, err, "error parsing asset-manifest.json")
+	if err = json.Unmarshal(b, &assetsPartial); err != nil {
+		errorFrontend(r, err, "error parsing asset-manifest.json")
 		return
 	}
 
@@ -154,55 +165,30 @@ func initFrontend(r *gin.Engine, f fs.FS, logger *zap.Logger) {
 			if jsEntrypoint == "" {
 				jsEntrypoint = v
 			} else {
-				logger.Warn("multiple JS entrypoints found", zap.String("entrypoint", v))
+				slog.Warn("multiple JS entrypoints found", "entrypoint", v)
 			}
 		} else if strings.HasSuffix(k, ".css") {
 			if cssEntrypoint == "" {
 				cssEntrypoint = v
 			} else {
-				logger.Warn("multiple CSS entrypoints found", zap.String("entrypoint", v))
+				slog.Warn("multiple CSS entrypoints found", "entrypoint", v)
 			}
 		}
 	}
 
 	// Return with an error if the JS entrypoint is not found.
 	if jsEntrypoint == "" {
-		errorFrontend(r, logger, nil, "no JS entrypoint found")
+		errorFrontend(r, nil, "no JS entrypoint found")
 		return
 	}
 
 	// Return with an error if the CSS entrypoint is not found.
 	if cssEntrypoint == "" {
-		errorFrontend(r, logger, nil, "no CSS entrypoint found")
+		errorFrontend(r, nil, "no CSS entrypoint found")
 		return
 	}
 
-	// Find the regions blob on the filesystem.
-	b, err = os.ReadFile("regions.yml")
-	if err != nil {
-		if os.IsNotExist(err) {
-			b = []byte(`- id: local
-  name: Local
-  url: /`)
-		} else {
-			errorFrontend(r, logger, nil, "error reading regions.yml")
-			return
-		}
-	}
-
-	// Attempt to unmarshal the YAML.
-	var regions []region
-	if err := yaml.Unmarshal(b, &regions); err != nil {
-		errorFrontend(r, logger, err, "error parsing regions.yml")
-		return
-	}
-	jBlob, err := json.Marshal(regions)
-	if err != nil {
-		errorFrontend(r, logger, err, "error marshaling regions.yml")
-		return
-	}
-	jBlobStr := string(jBlob)
-
+	r.StaticFS("/assets", http.FS(f))
 	// Handle each route.
 	for k, v := range routes {
 		routeInfoCpy := v
@@ -211,14 +197,49 @@ func initFrontend(r *gin.Engine, f fs.FS, logger *zap.Logger) {
 			c.Header("Content-Type", "text/html; charset=utf-8")
 			c.Status(http.StatusOK)
 			err := tpl.Execute(c.Writer, map[string]string{
-				"JavaScriptPath": jsEntrypoint,
-				"CSSPath":        cssEntrypoint,
+				"JavaScriptPath": "/assets" + jsEntrypoint,
+				"CSSPath":        "/assets" + cssEntrypoint,
 				"EmbedTitle":     title,
-				"Regions":        jBlobStr,
+				"Regions":        loadRegions(r),
 			})
 			if err != nil {
+				c.Status(http.StatusInternalServerError)
 				c.Error(err)
 			}
 		})
 	}
+}
+
+// loadRegions loads the regions.yml file from the filesystem and returns
+// a JSON blob of the regions.
+// Regions are used by /ping, to determine from where to ping the given host.
+// Regions are used by /traceroute, to determine from where to traceroute the given host.
+// Regions are used by /bgp, to determine from where to get the BGP route for the given host.
+func loadRegions(r gin.IRouter) string {
+	// Load regions.yml from the filesystem.
+	regionsYAMLString, err := os.ReadFile("regions.yml")
+	if err != nil {
+		if os.IsNotExist(err) {
+			regionsYAMLString = []byte(`- id: local
+  name: Local
+  url: /`)
+		} else {
+			errorFrontend(r, err, "error reading regions.yml")
+			return ""
+		}
+	}
+
+	// Attempt to unmarshal the YAML.
+	var regions []region
+	if err := yaml.Unmarshal([]byte(regionsYAMLString), &regions); err != nil {
+		errorFrontend(r, err, "error parsing regions.yml")
+		return ""
+	}
+	jBlob, err := json.Marshal(regions)
+	if err != nil {
+		errorFrontend(r, err, "error marshaling regions.yml")
+		return ""
+	}
+
+	return string(jBlob)
 }

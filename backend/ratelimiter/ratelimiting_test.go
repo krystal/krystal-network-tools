@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/zap/zaptest"
 )
 
 type jsonValue struct {
@@ -395,7 +394,7 @@ func TestNewBucket(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			b := newBucket(zaptest.NewLogger(t), tt.maxUses, tt.per, tt.backoff)
+			b := newBucket(tt.maxUses, tt.per, tt.backoff)
 			wg := &sync.WaitGroup{}
 			parallelTasksBefore := false
 			for _, v := range tt.reqs {

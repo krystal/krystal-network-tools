@@ -5,6 +5,8 @@ processes:
     image: ghcr.io/krystal/identity
     imageTag: latest
     env:
+      PORT: <port here> # e.g., 8080
+      APP_ENV: <environment here> # e.g., prod (production), dev (development)
       DNS_SERVER: <dns server here>
     mounts:
       - host: /run/bird/bird.ctl

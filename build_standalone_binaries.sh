@@ -6,10 +6,10 @@ nvm install
 nvm use
 npm ci
 npm run build
-rm -rf ../backend/frontend_blobs
-cp -r build ../backend/frontend_blobs
+rm -rf ../backend/frontend/frontend_blobs
+cp -r build ../backend/frontend/frontend_blobs
 cd ../backend
-rm frontend_blobs/index.html
+rm frotend/frontend_blobs/index.html
 rm -rf ../binaries
 mkdir ../binaries
 GOOS=linux GOARCH=amd64 go build -o ../binaries/backend-linux-amd64

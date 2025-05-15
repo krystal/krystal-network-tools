@@ -3,14 +3,14 @@ package api_v1
 import (
 	"context"
 	"errors"
-	"fmt"
+	"github.com/krystal/krystal-network-tools/backend/services"
+	"log/slog"
 	"net"
-	"strings"
+	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	pingttl "github.com/strideynet/go-ping-ttl"
-	"go.uber.org/zap"
 )
 
 type pingParams struct {
@@ -52,24 +52,18 @@ type pinger interface {
 	Ping(context.Context, *net.IPAddr, int) (*pingttl.PingResult, error)
 }
 
-func ping(g *gin.RouterGroup, log *zap.Logger, p pinger) {
+func ping(g *gin.RouterGroup) {
+	p := services.GetPinger()
 	g.GET("/:hostnameOrIp", func(ctx *gin.Context) {
 		// Get the hostname or IP.
 		hostnameOrIp := ctx.Param("hostnameOrIp")
 
-		// Defines if this is JSON.
-		isJson := ctx.ContentType() == "application/json"
-
 		// Bind the ping params.
 		var params pingParams
 		if err := ctx.BindQuery(&params); err != nil {
-			if isJson {
-				ctx.JSON(400, map[string]string{
-					"message": err.Error(),
-				})
-			} else {
-				ctx.String(400, "unable to parse query params: %s", err.Error())
-			}
+			ctx.JSON(400, map[string]string{
+				"message": err.Error(),
+			})
 			return
 		}
 
@@ -88,11 +82,12 @@ func ping(g *gin.RouterGroup, log *zap.Logger, p pinger) {
 		}
 		addr, err := net.ResolveIPAddr(lookupProtocol, hostnameOrIp)
 		if err != nil {
-			ctx.Error(&gin.Error{
+			ctx.Status(http.StatusInternalServerError)
+			_ = ctx.Error(&gin.Error{
 				Err:  errors.New("failed to resolve the ip address"),
 				Type: gin.ErrorTypePublic,
 			})
-			log.Error("ip resolve error", zap.Error(err))
+			slog.Error("ip resolve error", "err", err.Error())
 			return
 		}
 
@@ -105,7 +100,6 @@ func ping(g *gin.RouterGroup, log *zap.Logger, p pinger) {
 		}
 
 		// Defines all responses.
-		strResponses := []string{}
 		jsonResponses := []*PingResponse{}
 
 		// Make sure the interval is less than or equal to 1 second.
@@ -143,33 +137,19 @@ func ping(g *gin.RouterGroup, log *zap.Logger, p pinger) {
 						Message:   err.Error(),
 					}
 				}
-				log.Error("failed to ping", zap.Error(err))
+				//ctx.Status(http.StatusInternalServerError)
+				slog.Error("failed to ping", "err", err.Error())
 			}
 
-			// Log a successful ping.
-			if isJson {
-				jsonResponses = append(jsonResponses, &PingResponse{
-					Hostname:  hostname,
-					Error:     errorMessage,
-					IPAddress: addr.String(),
-					Latency:   u,
-				})
-			} else {
-				if u == nil {
-					strResponses = append(strResponses,
-						fmt.Sprintf("%s (ping failed)", hostnameOrIp))
-				} else {
-					strResponses = append(strResponses,
-						fmt.Sprintf("%s (time=%.3fms)", hostnameOrIp, *u))
-				}
-			}
+			jsonResponses = append(jsonResponses, &PingResponse{
+				Hostname:  hostname,
+				Error:     errorMessage,
+				IPAddress: addr.String(),
+				Latency:   u,
+			})
+
 		}
 
-		// Return the responses.
-		if isJson {
-			ctx.JSON(200, jsonResponses)
-		} else {
-			ctx.String(200, strings.Join(strResponses, "\n")+"\n")
-		}
+		ctx.JSON(http.StatusOK, jsonResponses)
 	})
 }

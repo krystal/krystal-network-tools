@@ -19,19 +19,11 @@ func Test_userIp(t *testing.T) {
 
 	// Run the tests on the handler.
 	tests := []struct {
-		name string
-
-		json    bool
+		name    string
 		expects string
 	}{
 		{
-			name:    "text",
-			json:    false,
-			expects: "1.1.1.1",
-		},
-		{
 			name:    "json",
-			json:    true,
 			expects: `{"ip":"1.1.1.1"}`,
 		},
 	}
@@ -44,9 +36,7 @@ func Test_userIp(t *testing.T) {
 				URL:        &url.URL{Path: "/ip"},
 				Header:     http.Header{},
 			}
-			if tt.json {
-				c.Request.Header.Set("Content-Type", "application/json")
-			}
+			c.Request.Header.Set("Content-Type", "application/json")
 			hn(c)
 			assert.Equal(t, http.StatusOK, w.Code)
 			assert.Equal(t, tt.expects, w.Body.String())
