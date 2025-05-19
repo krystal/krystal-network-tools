@@ -15,9 +15,9 @@ type DnsRecord = {
     name: string;
     dnsServer: string;
     value:
-        | string
-        | string[]
-        | {
+    | string
+    | string[]
+    | {
         expire: number;
         mbox: string;
         minttl: number;
@@ -39,13 +39,14 @@ const results: DnsResponse[] = [];
 
 const Dns: FC = () => {
     const [result, setResult] = useState<DnsResponse | null>(null);
+    const [errors, setErrors] = useState<Record<DnsType, Error>>({} as Record<DnsType, Error>);
 
     const empty =
         result && !Object.values(result).find((record) => !!record.length);
 
     async function fetch(host: string, type: DnsType, trace: boolean) {
         await request<DnsResponse>(
-            endpoint('/dns/:type/:host', {host, type, trace})
+            endpoint('/dns/:type/:host', { host, type, trace })
         ).then(res => {
             results.push(res);
             setResult((prev) => {
@@ -61,8 +62,20 @@ const Dns: FC = () => {
 
                 return res;
             });
-        }).catch(err => {
-            return err;
+        }).catch((err) => {
+            if (err instanceof Error) {
+                setErrors((prev) => {
+                    const newErrors = { ...prev };
+                    newErrors[type] = err;
+                    return newErrors;
+                });
+            } else {
+                setErrors((prev) => {
+                    const newErrors = { ...prev };
+                    newErrors[type] = new Error('Unknown error');
+                    return newErrors;
+                });
+            }
         });
     }
 
@@ -73,7 +86,7 @@ const Dns: FC = () => {
             <Card>
                 <DnsForm
                     disabled={false}
-                    onSubmit={async ({host, type, trace}) => {
+                    onSubmit={async ({ host, type, trace }) => {
                         setResult(null);
                         if (type === DnsType.ANY) {
                             const types = [
@@ -119,11 +132,26 @@ const Dns: FC = () => {
                                     </Tag>
                                 </Box>
                                 <Card overflowX="auto">
-                                    <DnsTable record={record}/>
+                                    <DnsTable record={record} />
                                 </Card>
                             </Fragment>
                         );
                     })}
+                {(Object.entries(errors).map(([type, error]) => (
+                        <Fragment key={type}>
+                            <Box>
+                                <Tag colorScheme="red" size="lg">
+                                    {type}
+                                </Tag>
+                            </Box>
+                            <Card overflowX="auto">
+                                <Text color="red.500">
+                                    {error.message}
+                                </Text>
+                            </Card>
+                        </Fragment>
+                    )))
+                }
             </Stack>
         </Stack>
     );
