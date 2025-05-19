@@ -16,7 +16,7 @@ COPY backend .
 COPY --from=frontend_build /var/app/build frontend/frontend_blobs
 RUN go build -o main
 
-FROM alpine:3.18
+FROM alpine:3.21
 WORKDIR /var/app
 ENV GIN_MODE=release
 COPY --from=backend_build /var/app/main .
