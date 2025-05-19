@@ -35,11 +35,36 @@ export type DnsResponse = {
     }[];
 };
 
+const results: DnsResponse[] = [];
+
 const Dns: FC = () => {
     const [result, setResult] = useState<DnsResponse | null>(null);
 
     const empty =
         result && !Object.values(result).find((record) => !!record.length);
+
+    async function fetch(host: string, type: DnsType, trace: boolean) {
+        await request<DnsResponse>(
+            endpoint('/dns/:type/:host', {host, type, trace})
+        ).then(res => {
+            results.push(res);
+            setResult((prev) => {
+                if (prev) {
+                    return {
+                        ...prev,
+                        [type]: [
+                            ...(prev[type] || []),
+                            ...(res[type] || [])
+                        ]
+                    };
+                }
+
+                return res;
+            });
+        }).catch(err => {
+            return err;
+        });
+    }
 
     return (
         <Stack spacing={6}>
@@ -49,6 +74,7 @@ const Dns: FC = () => {
                 <DnsForm
                     disabled={false}
                     onSubmit={async ({host, type, trace}) => {
+                        setResult(null);
                         if (type === DnsType.ANY) {
                             const types = [
                                 DnsType.A,
@@ -60,64 +86,13 @@ const Dns: FC = () => {
                                 DnsType.TXT,
                             ];
 
-                            const results: DnsResponse[] = [];
-                            const errors: string[] = [];
-
+                            // Fetch all types
                             for (const t of types) {
-                                try {
-                                    const res = await request<DnsResponse>(
-                                        endpoint('/dns/:type/:host', { host, type: t, trace })
-                                    );
-                                    results.push(res);
-                                } catch (error) {
-                                    errors.push(`Error fetching ${t} records: ${error}`);
-                                }
+                                await fetch(host, t, trace);
                             }
-                            const combinedResult: DnsResponse = results.reduce(
-                                (acc, res) => {
-                                    Object.keys(res).forEach((key) => {
-                                        const dnsKey = key as DnsType;
-                                        acc[dnsKey] = acc[dnsKey] || [];
-                                        acc[dnsKey].push(...res[dnsKey]);
-                                    });
-                                    return acc;
-                                },
-                                {} as DnsResponse
-                            );
-
-                            if (errors.length > 0) {
-                                for (const error of errors) {
-                                    const errorType = error.split(' ')[2] as DnsType;
-                                    combinedResult[errorType] = combinedResult[errorType] || [];
-                                    combinedResult[errorType].push({
-                                        records: [
-                                            {
-                                                type: errorType,
-                                                ttl: 0,
-                                                name: host,
-                                                dnsServer: '',
-                                                value: error,
-                                            }
-                                        ],
-                                        server: '',
-                                    });
-                                }
-                            }
-
-                            const orderedResult = Object.keys(combinedResult)
-                                .sort()
-                                .reduce((acc, key) => {
-                                    acc[key as DnsType] = combinedResult[key as DnsType];
-                                    return acc;
-                                }, {} as DnsResponse);
-
-                            setResult(orderedResult);
                             return;
                         }
-                        const result = await request<DnsResponse>(
-                            endpoint('/dns/:type/:host', {host, type, trace})
-                        );
-                        setResult(result);
+                        await fetch(host, type, trace);
                     }}
                 />
             </Card>
@@ -151,8 +126,7 @@ const Dns: FC = () => {
                     })}
             </Stack>
         </Stack>
-    )
-        ;
+    );
 };
 
 export default Dns;
