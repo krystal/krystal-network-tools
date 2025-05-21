@@ -6,7 +6,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	dnsLib "github.com/krystal/krystal-network-tools/backend/dns"
-	"go.uber.org/zap"
 )
 
 type rdnsParams struct {
@@ -14,7 +13,7 @@ type rdnsParams struct {
 	Trace bool `form:"trace"`
 }
 
-func rdns(g group, log *zap.Logger, dnsServer string) {
+func rdns(g group, dnsServer string) {
 	g.GET("/:ip", func(ctx *gin.Context) {
 		isJson := ctx.ContentType() == "application/json"
 		var params rdnsParams
@@ -65,9 +64,7 @@ func rdns(g group, log *zap.Logger, dnsServer string) {
 			return
 		}
 
-		result, err := dnsLib.LookupRDNS(
-			log, ipAddr, dnsServer,
-		)
+		result, err := dnsLib.LookupRDNS(ipAddr, dnsServer)
 		if err != nil {
 			ctx.Error(&gin.Error{
 				Type: gin.ErrorTypePublic,

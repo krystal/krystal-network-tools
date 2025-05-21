@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/rand"
 	"net"
 	"reflect"
@@ -12,7 +13,6 @@ import (
 
 	"github.com/gobeam/stringy"
 	godns "github.com/miekg/dns"
-	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -119,7 +119,6 @@ type Record struct {
 // rawQuery sends a DNS request to server specified by addr.
 // It returns the raw dns response.
 func rawQuery(
-	log *zap.Logger,
 	addr string,
 	recordType uint16,
 	hostname string,
@@ -137,7 +136,7 @@ func rawQuery(
 	}}
 	conn, err := godns.Dial("tcp", addr)
 	if err != nil {
-		log.Error("failed to connect to dns server", zap.Error(err))
+		slog.Error("failed to connect to dns server:", "err", err.Error())
 		return nil, err
 	}
 	defer conn.Close()
@@ -151,7 +150,7 @@ func rawQuery(
 	// Read the DNS response.
 	msg, err = conn.ReadMsg()
 	if err != nil {
-		log.Error("failed to read from dns server", zap.Error(err))
+		slog.Error("failed to read from dns server:", "err", err.Error())
 	}
 	return msg, err
 }
@@ -202,12 +201,12 @@ func recordFromAnswer(answer godns.RR) (Record, error) {
 	return record, nil
 }
 
-func queryTypeFromNameserver(log *zap.Logger, nameserver, recordType, lookup string) ([]Record, error) {
+func queryTypeFromNameserver(nameserver, recordType, lookup string) ([]Record, error) {
 	// Do the main DNS lookup.
 	addr := nameserver + ":53"
-	result, err := rawQuery(log, addr, godns.StringToType[recordType], lookup)
+	result, err := rawQuery(addr, godns.StringToType[recordType], lookup)
 	if err != nil {
-		log.Error("failed to lookup DNS record", zap.Error(err))
+		slog.Error("failed to lookup DNS record:", "err", err.Error())
 		return nil, err
 	}
 
@@ -229,7 +228,7 @@ func queryTypeFromNameserver(log *zap.Logger, nameserver, recordType, lookup str
 	return records, nil
 }
 
-func findAuthoritativeNameserver(log *zap.Logger, hostname string) (string, RecordType, error) {
+func findAuthoritativeNameserver(hostname string) (string, RecordType, error) {
 	// Select a root nameserver to begin our search
 	rootNameserver := NextRootServer()
 
@@ -241,7 +240,7 @@ func findAuthoritativeNameserver(log *zap.Logger, hostname string) (string, Reco
 		}
 		iteration += 1
 
-		msg, err := rawQuery(log, nameserver+":53", godns.TypeNS, hostname)
+		msg, err := rawQuery(nameserver+":53", godns.TypeNS, hostname)
 		if err != nil {
 			return "", err
 		}
@@ -318,8 +317,8 @@ func findAuthoritativeNameserver(log *zap.Logger, hostname string) (string, Reco
 	return authoritativeNameserver, resp, nil
 }
 
-func traceQuery(log *zap.Logger, dnsServer, recordType, hostname string) (Response, error) {
-	authoritativeNameserver, answer, err := findAuthoritativeNameserver(log, hostname)
+func traceQuery(dnsServer, recordType, hostname string) (Response, error) {
+	authoritativeNameserver, answer, err := findAuthoritativeNameserver(hostname)
 	if err != nil {
 		return nil, err
 	}
@@ -348,7 +347,7 @@ func traceQuery(log *zap.Logger, dnsServer, recordType, hostname string) (Respon
 	for _, recordLoop := range recordTypes {
 		record := recordLoop
 		eg.Go(func() error {
-			records, err := queryTypeFromNameserver(log, authoritativeNameserver, record, hostname)
+			records, err := queryTypeFromNameserver(authoritativeNameserver, record, hostname)
 			if err != nil {
 				return err
 			}
@@ -373,7 +372,7 @@ func traceQuery(log *zap.Logger, dnsServer, recordType, hostname string) (Respon
 	}, nil
 }
 
-func recursiveQuery(log *zap.Logger, dnsServer, recordType, hostname string) (Response, error) {
+func recursiveQuery(dnsServer, recordType, hostname string) (Response, error) {
 	// Create the response map.
 	responses := Response{}
 	responsesLock := sync.Mutex{}
@@ -389,10 +388,9 @@ func recursiveQuery(log *zap.Logger, dnsServer, recordType, hostname string) (Re
 	eg := errgroup.Group{}
 
 	// Go through each record type and do the lookups.
-	for _, recordLoop := range recordTypes {
-		record := recordLoop
+	for _, record := range recordTypes {
 		eg.Go(func() error {
-			records, err := queryTypeFromNameserver(log, dnsServer, record, hostname)
+			records, err := queryTypeFromNameserver(dnsServer, record, hostname)
 			if err != nil {
 				return err
 			}
@@ -415,17 +413,17 @@ func recursiveQuery(log *zap.Logger, dnsServer, recordType, hostname string) (Re
 	return responses, nil
 }
 
-func Lookup(log *zap.Logger, dnsServer, recordType, hostname string, fullTrace bool) (Response, error) {
+func Lookup(dnsServer, recordType, hostname string, fullTrace bool) (Response, error) {
 	// Add dot to hostname if necessary
 	if !strings.HasSuffix(hostname, ".") {
 		hostname += "."
 	}
 
 	if fullTrace {
-		return traceQuery(log, dnsServer, recordType, hostname)
+		return traceQuery(dnsServer, recordType, hostname)
 	}
 
-	return recursiveQuery(log, dnsServer, recordType, hostname)
+	return recursiveQuery(dnsServer, recordType, hostname)
 }
 
 func reverseIP(ip net.IP) string {
@@ -440,9 +438,9 @@ func reverseIP(ip net.IP) string {
 	return strings.Join(reversed, ".")
 }
 
-func LookupRDNS(log *zap.Logger, ip net.IP, dnsServer string) (RecordType, error) {
+func LookupRDNS(ip net.IP, dnsServer string) (RecordType, error) {
 	hostname := reverseIP(ip) + ".in-addr.arpa."
-	resp, err := traceQuery(log, dnsServer, "PTR", hostname)
+	resp, err := traceQuery(dnsServer, "PTR", hostname)
 	if err != nil {
 		return nil, err
 	}

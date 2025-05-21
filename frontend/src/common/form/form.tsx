@@ -71,7 +71,6 @@ const Form: FormComponent = ({
               values.toString()
           );
         } catch (err) {
-          console.log({ err });
           return {
             [FORM_ERROR]:
               err instanceof Error

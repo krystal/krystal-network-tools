@@ -1,12 +1,12 @@
 package dns
 
 import (
-	"go.uber.org/zap"
+	"log/slog"
 	"os"
 )
 
 // GetCachedDNSServer is used to get the cache DNS server.
-func GetCachedDNSServer(log *zap.Logger) string {
+func GetCachedDNSServer() string {
 	// Handle the environment variable override.
 	s := os.Getenv("DNS_SERVER")
 	if s != "" {
@@ -20,7 +20,7 @@ func GetCachedDNSServer(log *zap.Logger) string {
 	}
 
 	// Find the nameserver.
-	log.Warn("No DNS_SERVER environment variable set. Using system default DNS server. In production, " +
+	slog.Warn("No DNS_SERVER environment variable set. Using system default DNS server. In production, " +
 		"this should be set.")
 	ns := getNameservers(resolv)
 	if len(ns) == 0 {
