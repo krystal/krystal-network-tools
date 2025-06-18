@@ -1,19 +1,18 @@
 package dns
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gobeam/stringy"
+	godns "github.com/miekg/dns"
 	"log/slog"
 	"math/rand"
 	"net"
 	"reflect"
 	"strings"
 	"sync"
-
-	"github.com/gobeam/stringy"
-	godns "github.com/miekg/dns"
-	"golang.org/x/sync/errgroup"
 )
 
 // Used to clean the case of things in a value for JSON and remove unwanted keys.
@@ -341,30 +340,36 @@ func traceQuery(dnsServer, recordType, hostname string) (Response, error) {
 		recordTypes = []string{}
 	}
 
-	eg := errgroup.Group{}
+	errs := make([]error, 0)
+
 	answerLock := sync.Mutex{}
 	// Spawn a goroutine to look up each record type.
 	for _, recordLoop := range recordTypes {
 		record := recordLoop
-		eg.Go(func() error {
-			records, err := queryTypeFromNameserver(authoritativeNameserver, record, hostname)
-			if err != nil {
-				return err
-			}
-			answerLock.Lock()
-			answer[len(answer)-1].Records = append(
-				answer[len(answer)-1].Records,
-				records...,
-			)
+		records, err := queryTypeFromNameserver(authoritativeNameserver, record, hostname)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to query %s from %s: %w", record, authoritativeNameserver, err))
+			continue
+		}
 
-			answerLock.Unlock()
-			return nil
-		})
+		answerLock.Lock()
+		answer[len(answer)-1].Records = append(
+			answer[len(answer)-1].Records,
+			records...,
+		)
+
+		answerLock.Unlock()
 	}
 
-	// Wait for the results.
-	if err := eg.Wait(); err != nil {
-		return nil, err
+	if len(errs) > 0 {
+		// Create a single error message for all errors.
+		errMsg := "errors occurred during DNS lookup:\n"
+		for _, err := range errs {
+			errMsg += "- " + err.Error() + "\n"
+		}
+		return Response{
+			"TRACE": answer,
+		}, errors.New(errMsg)
 	}
 
 	return Response{
@@ -375,7 +380,8 @@ func traceQuery(dnsServer, recordType, hostname string) (Response, error) {
 func recursiveQuery(dnsServer, recordType, hostname string) (Response, error) {
 	// Create the response map.
 	responses := Response{}
-	responsesLock := sync.Mutex{}
+	errs := make([]error, 0)
+	//responsesLock := sync.Mutex{}
 
 	// Get the record types.
 	recordTypes := []string{strings.ToUpper(recordType)}
@@ -384,46 +390,32 @@ func recursiveQuery(dnsServer, recordType, hostname string) (Response, error) {
 		recordTypes = []string{"A", "AAAA", "CNAME", "MX", "PTR", "SOA", "TXT", "NS"}
 	}
 
-	// Create the error groups.
-	eg := errgroup.Group{}
-
 	// Go through each record type and do the lookups.
 	for _, record := range recordTypes {
-		eg.Go(func() error {
-			records, err := queryTypeFromNameserver(dnsServer, record, hostname)
-			if err != nil {
-				return err
-			}
-			responsesLock.Lock()
-			responses[record] = RecordType{
-				Server{
-					Server:  dnsServer,
-					Records: records,
-				},
-			}
-			responsesLock.Unlock()
-			return nil
-		})
+		records, err := queryTypeFromNameserver(dnsServer, record, hostname)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to query %s from %s: %w", record, dnsServer, err))
+			continue
+		}
+		responses[record] = RecordType{
+			Server{
+				Server:  dnsServer,
+				Records: records,
+			},
+		}
 	}
 
-	// Wait for the group to finish and then return the results.
-	if err := eg.Wait(); err != nil {
-		return nil, err
+	// Wrap all the errors in a single error if there are any.
+	if len(errs) > 0 {
+		// Create a single error message for all errors.
+		errMsg := "errors occurred during DNS lookup:\n"
+		for _, err := range errs {
+			errMsg += "- " + err.Error() + "\n"
+		}
+		return responses, errors.New(errMsg)
 	}
+
 	return responses, nil
-}
-
-func Lookup(dnsServer, recordType, hostname string, fullTrace bool) (Response, error) {
-	// Add dot to hostname if necessary
-	if !strings.HasSuffix(hostname, ".") {
-		hostname += "."
-	}
-
-	if fullTrace {
-		return traceQuery(dnsServer, recordType, hostname)
-	}
-
-	return recursiveQuery(dnsServer, recordType, hostname)
 }
 
 func reverseIP(ip net.IP) string {
@@ -446,4 +438,82 @@ func LookupRDNS(ip net.IP, dnsServer string) (RecordType, error) {
 	}
 
 	return resp["TRACE"], nil
+}
+
+// LookupWithContext is like Lookup but supports context for timeout/cancellation and partial results.
+func LookupWithContext(ctx context.Context, dnsServer, recordType, hostname string, fullTrace bool) (Response, error) {
+	if !strings.HasSuffix(hostname, ".") {
+		hostname += "."
+	}
+	results := make(Response)
+	errCh := make(chan error, 1)
+	doneCh := make(chan struct{})
+
+	go func() {
+		var resp Response
+		var err error
+		if fullTrace {
+			resp, err = traceQueryWithContext(ctx, dnsServer, recordType, hostname)
+		} else {
+			resp, err = recursiveQueryWithContext(ctx, dnsServer, recordType, hostname)
+		}
+		if resp != nil {
+			for k, v := range resp {
+				results[k] = v
+			}
+		}
+		errCh <- err
+		close(doneCh)
+	}()
+
+	select {
+	case <-ctx.Done():
+		return results, ctx.Err()
+	case err := <-errCh:
+		return results, err
+	}
+}
+
+// traceQueryWithContext is like traceQuery but supports context for timeout/cancellation.
+func traceQueryWithContext(ctx context.Context, dnsServer, recordType, hostname string) (Response, error) {
+	respCh := make(chan Response, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		resp, err := traceQuery(dnsServer, recordType, hostname)
+		if err != nil {
+			errCh <- err
+			return
+		}
+		respCh <- resp
+	}()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case err := <-errCh:
+		return nil, err
+	case resp := <-respCh:
+		return resp, nil
+	}
+}
+
+// recursiveQueryWithContext is like recursiveQuery but supports context for timeout/cancellation.
+func recursiveQueryWithContext(ctx context.Context, dnsServer, recordType, hostname string) (Response, error) {
+	respCh := make(chan Response, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		resp, err := recursiveQuery(dnsServer, recordType, hostname)
+		if err != nil {
+			errCh <- err
+			return
+		}
+		respCh <- resp
+	}()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case err := <-errCh:
+		return nil, err
+	case resp := <-respCh:
+		return resp, nil
+	}
 }
