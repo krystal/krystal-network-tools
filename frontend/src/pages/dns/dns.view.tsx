@@ -88,7 +88,7 @@ const Dns: FC = () => {
                     disabled={false}
                     onSubmit={async ({ host, type, trace }) => {
                         setResult(null);
-                        if (type === DnsType.ANY) {
+                        if (type === DnsType.ANY && !trace) {
                             const types = [
                                 DnsType.A,
                                 DnsType.AAAA,

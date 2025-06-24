@@ -38,6 +38,25 @@ func dns(g *gin.RouterGroup, dnsServer string) {
 			return
 		}
 
+		// Separate tracing logic from regular queries
+		if params.Trace {
+			results, err := dnsLib.LookupTrace(dnsServer, recordType, hostname)
+			if err != nil && results == nil {
+				context.Error(&gin.Error{
+					Type: gin.ErrorTypePublic,
+					Err:  fmt.Errorf("err: %v", err),
+				})
+				return
+			} else if err != nil && results != nil {
+				// If we have results, we can still return them even if there was an error.
+				context.JSON(http.StatusPartialContent, results)
+				return
+
+			}
+			context.JSON(http.StatusOK, results)
+			return
+		}
+
 		// Do the DNS lookup.
 		results, err := dnsLib.Lookup(dnsServer, recordType, hostname, params.Trace)
 		if err != nil {
@@ -49,6 +68,5 @@ func dns(g *gin.RouterGroup, dnsServer string) {
 		}
 
 		context.JSON(http.StatusOK, results)
-
 	})
 }
