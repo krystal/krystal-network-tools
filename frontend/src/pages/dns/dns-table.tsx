@@ -81,6 +81,25 @@ type DnsTableRowProps = {
 
 const DnsTableRow: FC<DnsTableRowProps> = ({ row, showPriority }) => {
   const arrowColor = useColorModeValue("gray.200", "gray.900");
+    if (
+        typeof row.value === "object" &&
+        row.value !== null &&
+        "error" in row.value &&
+        typeof (row.value as any).error === "string"
+    ) {
+        return (
+            <Tr bg="red.100">
+                <Td border="none">
+                    <Tag size="sm" fontWeight="bold" colorScheme={getDnsColor(row.type)}>
+                        {row.type}
+                    </Tag>
+                </Td>
+                <Td border="none" colSpan={5}>
+                    {(row.value as any).error}
+                </Td>
+            </Tr>
+        );
+    }
 
   return (
     <Tr>

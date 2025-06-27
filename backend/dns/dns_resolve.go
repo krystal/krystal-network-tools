@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gobeam/stringy"
 	godns "github.com/miekg/dns"
@@ -134,7 +135,7 @@ func rawQuery(
 		Qtype:  recordType,
 		Qclass: godns.StringToClass["IN"],
 	}}
-	conn, err := godns.Dial("tcp", addr)
+	conn, err := godns.DialTimeout("tcp", addr, time.Second*1)
 	if err != nil {
 		slog.Error("failed to connect to dns server:", "err", err.Error())
 		return nil, err
@@ -424,6 +425,68 @@ func Lookup(dnsServer, recordType, hostname string, fullTrace bool) (Response, e
 	}
 
 	return recursiveQuery(dnsServer, recordType, hostname)
+}
+
+func LookupTrace(dnsServer, recordType, hostname string) (Response, error) {
+	if !strings.HasSuffix(hostname, ".") {
+		hostname += "."
+	}
+
+	authoritativeNameserver, answer, err := findAuthoritativeNameserver(hostname)
+	if err != nil {
+		return nil, err
+	}
+
+	// When tracing on a cname, we pick it up during the auth nameserver search
+	// and aren't provided a authoritative nameserver to continue to.
+	if authoritativeNameserver == "" {
+		return Response{
+			"TRACE": answer,
+		}, nil
+	}
+
+	// Get the record types.
+	recordTypes := []string{strings.ToUpper(recordType)}
+	if recordType == "ANY" {
+		// Not many DNS resolvers support this anymore, set it to literally all record types.
+		recordTypes = []string{"A", "AAAA", "CNAME", "MX", "PTR", "SOA", "TXT"}
+	} else if recordTypes[0] == "NS" {
+		// We already have this data. Make this a blank slice.
+		recordTypes = []string{}
+	}
+
+	var errs []error
+	for _, recordLoop := range recordTypes {
+		records, err := queryTypeFromNameserver(authoritativeNameserver, recordLoop, hostname)
+		if err != nil {
+			answer[len(answer)-1].Records = append(
+				answer[len(answer)-1].Records,
+				Record{
+					Type:  recordLoop,
+					TTL:   0,
+					Name:  hostname,
+					Value: json.RawMessage(fmt.Sprintf(`{"error": "failed to query %s record: %v"}`, recordLoop, err)),
+				},
+			)
+			errs = append(errs, fmt.Errorf("failed to query %s record from %s: %w", recordLoop, authoritativeNameserver, err))
+			continue
+		}
+		answer[len(answer)-1].Records = append(
+			answer[len(answer)-1].Records,
+			records...,
+		)
+	}
+
+	if len(errs) > 0 {
+		for _, err := range errs {
+			slog.Error("Error during DNS trace", "error", err)
+		}
+	}
+
+	// @TODO: what if we have no records?
+	return Response{
+		"TRACE": answer,
+	}, errors.Join(errs...)
 }
 
 func reverseIP(ip net.IP) string {
