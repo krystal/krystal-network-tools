@@ -66,9 +66,23 @@ func traceroute(g *gin.RouterGroup, pinger pinger) {
 			return
 		}
 
-		// Defines all hops that need to be ran.
-		if p.TotalHops > 64 || (p.Hop == 0 && p.TotalHops == 0) {
-			p.TotalHops = 64
+		const maxHops = 64
+		if p.TotalHops > maxHops {
+			c.Error(&gin.Error{
+				Type: gin.ErrorTypePublic,
+				Err:  errors.New("total hops cannot be greater than " + strconv.Itoa(maxHops)),
+			})
+			return
+		}
+		if p.Hop > maxHops {
+			c.Error(&gin.Error{
+				Type: gin.ErrorTypePublic,
+				Err:  errors.New("hop cannot be greater than " + strconv.Itoa(maxHops)),
+			})
+			return
+		}
+		if p.Hop == 0 && p.TotalHops == 0 {
+			p.TotalHops = maxHops
 		}
 		hops := []uint{p.Hop}
 		if p.TotalHops != 0 {
