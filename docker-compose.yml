@@ -10,12 +10,11 @@ services:
           path: frontend/.
           ignore:
             - node_modules
-    network_mode: host
     environment:
       DNS_SERVER: "1.1.1.1"
-      PORT: "8080"
+      PORT: "${PORT:-8080}"
 #      HTTPS_HOST: "k.localhost"
     volumes:
       - "./regions.development.yml:/var/app/regions.yml"
     ports:
-      - "8080:8080"
+      - "${PORT:-8080}:${PORT:-8080}"
